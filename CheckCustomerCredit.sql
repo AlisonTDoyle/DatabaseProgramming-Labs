@@ -25,7 +25,12 @@ WHERE ProductID = @EProductId;
 -- calculate order cost
 SELECT @IOrderCost = @EQuantityBeingOrdered * @IProductCost;
 -- Transactional/Business logic
-
+-- check if order cost is greater than customer credit
+IF (@IOrderCost > @ICreditLimit)
+BEGIN
+    ;throw 50001, 'You do not have enough credit :(',1;
+END
 -- Subsprocs
 -- Success message
+PRINT 'You have enough credit! :)'
 GO
