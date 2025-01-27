@@ -23,7 +23,7 @@ FROM dbo.ProductTBL
 WHERE ProductID = @EProductId;
 -- Transactional/Business logic
 -- calculate order cost
-SELECT @IOrderCost = @EQuantityBeingOrdered * @IProductCost;
+SET @IOrderCost = @EQuantityBeingOrdered * @IProductCost;
 -- Transactional/Business logic
 -- check if order cost is greater than customer credit
 IF (@IOrderCost > @ICreditLimit)
