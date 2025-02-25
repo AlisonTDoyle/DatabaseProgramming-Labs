@@ -4,17 +4,21 @@ SET QUOTED_IDENTIFIER ON
 GO
 ALTER proc [dbo].[InsertPatient]
 -- external variables
-@EPatientFirstName varchar(35)
-, @EPatientLastName varchar(35)
-, @EWardId int
-, @ECovidStatus char(8)
+@EPatientFirstName VARCHAR(35)
+, @EPatientLastName VARCHAR(35)
+, @EWardId INT
+, @ECovidStatus CHAR(8)
+, @EPatientId INT OUTPUT
 AS
 -- business logic
 BEGIN TRY
+-- insert patient
 INSERT INTO dbo.PatientTBL 
 (PatientFname, PatientLname, PatientWarD, PatientCOVIDStatus)
 VALUES
 (@EPatientFirstName, @EPatientLastName, @EWardId, @ECovidStatus)
+-- capture inserted patient id
+SELECT @EPatientId = SCOPE_IDENTITY()
 END TRY
 BEGIN CATCH
 ;throw
