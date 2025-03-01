@@ -9,11 +9,13 @@ ALTER proc [dbo].[InsertIntoCareTeam]
 as
 -- business logic
 BEGIN TRY
-INSERT INTO dbo.PatientTBL 
-(PatientFname, PatientLname, PatientWarD, PatientCOVIDStatus)
-VALUES
-(@EPatientFirstName, @EPatientLastName, @EWardId, @ECovidStatus)
+-- assign patient to care team
+UPDATE dbo.CareTeamTBL
+SET PatientID = @EPatientId
+WHERE CareTeamID = @ECareTeamId
 END TRY
 BEGIN CATCH
+;THROW
 END CATCH
 -- success message
+RAISERROR ('Patient has been assigned to care team', 16, 1)

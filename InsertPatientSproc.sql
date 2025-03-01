@@ -23,4 +23,5 @@ END TRY
 BEGIN CATCH
 ;throw
 END CATCH
+-- success message
 RAISERROR ('Patient has been inserted', 16, 1)
