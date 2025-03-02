@@ -49,4 +49,5 @@ END
 -- CHECK IF WARD HAS CAPACITY FOR NEW PATIENT
 -- SUBSPROCS
 -- SUCCESS MESSAGE
+print 'Patient successfully recorded'
 GO
