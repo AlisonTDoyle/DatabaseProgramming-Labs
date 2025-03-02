@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 ALTER proc [dbo].[ExamMaster]
--- external variables
+-- EXTERNAL VARIABLES
 @EPatientFirstName VARCHAR(35)
 , @EPatientLastName VARCHAR(35)
 , @EPatientDateOfBirth DATE
@@ -11,23 +11,42 @@ ALTER proc [dbo].[ExamMaster]
 , @EWardId INT
 , @ECareTeamIDs INT -- need to update
 as
--- internal variables
-Declare @IPatientsOnWard TINYINT
-, @IWardCapacity TINYINT
-, @IWardSpecialty TINYINT
-, @INoOfNursesWithSpeciality INT -- need to update
-, @INoOfNursesVaccinated INT -- need to update
-, @INoOfNursesActiveOnLessThan3Wards INT -- need to update
-, @INoOfNursesOnCareTeam INT -- need to update
-, @INursesWithoutWardOrCareTeamVaccinated INT -- need to update
-, @INursesWithoutWardOrCareTeamUnvaccinated INT -- need to update
-, @INoOfDocorsOnCareTeam INT -- need to update
-, @INoOfDoctorsVaccinated INT  -- need to update
-, @INoOfDoctorsWithSpecialty INT -- need to update
-, @IPatientAge INT
-, @IDayOfWeek VARCHAR(7)
--- read data and populate internal vars
--- business logic
--- subsprocs
--- success message
+-- INTERNAL VARIABLES
+Declare 
+@IDayOfTheWeek VARCHAR(9)
+, @IWardCapacity INT
+, @IWardCapacityForToday INT
+, @ICurrentWardPatientCount TINYINT
+-- READ DATA AND POPULATE INTERNAL VARIABLES
+-- get day of the week
+SELECT @IDayOfTheWeek = DATENAME(WEEKDAY, GETDATE())
+-- get default capacity for ward
+SELECT @IWardCapacity = WardCapacity
+FROM [dbo].[WarDTBL]
+WHERE WardID = @EWardId
+-- calculate todays capacity
+IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
+BEGIN
+-- if weekend, take into account increased capacity
+SELECT @IWardCapacityForToday = @IWardCapacity * 1.2
+END
+ELSE
+BEGIN
+-- if weekday, capacity is normal
+SELECT @IWardCapacityForToday = @IWardCapacity
+END
+-- get current no. of patients on ward
+SELECT @ICurrentWardPatientCount = COUNT(*)
+FROM [dbo].PatientTBL
+WHERE PatientWarD = @EWardId
+-- BUSINESS LOGIC
+-- check if patient will breach capacity
+IF ((@ICurrentWardPatientCount + 1) > @IWardCapacityForToday)
+BEGIN
+-- alert user to ward capacity breach
+;throw 500001, 'Patient breaches ward capacity', 1
+END
+-- CHECK IF WARD HAS CAPACITY FOR NEW PATIENT
+-- SUBSPROCS
+-- SUCCESS MESSAGE
 GO
