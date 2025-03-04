@@ -5,11 +5,11 @@ GO
 ALTER proc [dbo].[ExamMaster]
 -- EXTERNAL VARIABLES
 @EPatientFirstName VARCHAR(35)
-,@EPatientLastName VARCHAR(35)
-,@EPatientDateOfBirth DATE
-,@EPatientCovidStatus char(8)
-,@EWardId INT
-,@ECareTeamIDs PatientCareTeamsUDT READONLY
+, @EPatientLastName VARCHAR(35)
+, @EPatientDateOfBirth DATE
+, @EPatientCovidStatus char(8)
+, @EWardId INT
+, @ECareTeamIDs PatientCareTeamsUDT READONLY
 as
 -- INTERNAL VARIABLES
 Declare 
@@ -17,8 +17,13 @@ Declare
 , @IWardCapacity INT
 , @IWardCapacityForToday INT
 , @ICurrentWardPatientCount TINYINT
+, @IUpdateWardStatus BIT
 , @IPatientAge TINYINT
 , @IWardSpeciality CHAR(10)
+, @ICareTeamNurses CareTeamNursesUDT
+, @INursesWithCorrectSpeciality INT
+, @IDoctorsWithCorrectSpeciality INT
+, @INewPatientId INT
 -- READ DATA AND POPULATE INTERNAL VARIABLES
 -- get day of the week
 SELECT @IDayOfTheWeek = DATENAME(WEEKDAY, GETDATE())
@@ -30,13 +35,18 @@ WHERE WardID = @EWardId
 SELECT @ICurrentWardPatientCount = COUNT(*)
 FROM [dbo].PatientTBL
 WHERE PatientWarD = @EWardId
--- calculate patient age
-SELECT @IPatientAge = DATEDIFF(YEAR, @EPatientDateOfBirth, GETDATE())
-PRINT 'Patient Age: ' + CAST(@IPatientAge AS NVARCHAR(10));
 -- get selected ward speciality
 SELECT @IWardSpeciality = WardSpeciality
 FROM [dbo].[WarDTBL]
 WHERE WardID = @EWardId
+-- get nurses that are trying to be assigned to patient
+-- INSERT INTO @ICareTeamNurses
+-- (NurseId, CareTeamId, NurseSpeciality, NurseWard, Covid19Vaccinated)
+-- SELECT *
+-- FROM NurseCareTeamMembersTBL
+-- INNER JOIN NurseTBL
+-- ON NurseCareTeamMembersTBL.MemberID = NurseTBL.NurseID
+-- WHERE NurseCareTeamMembersTBL.CareTeamID = @ECareTeamIDs
 -- BUSINESS LOGIC
 -- calculate todays capacity
 IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
@@ -55,6 +65,17 @@ BEGIN
 -- alert user to ward capacity breach
 ;throw 500001, 'Patient breaches ward capacity', 1
 END
+-- check if ward is starting to overflow (only applicable to weekends)
+IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
+BEGIN
+IF (((@ICurrentWardPatientCount + 1) > @IWardCapacity) AND ((@ICurrentWardPatientCount + 1) <= @IWardCapacityForToday))
+BEGIN
+SELECT @IUpdateWardStatus = 1
+END
+END
+-- calculate patient age
+SELECT @IPatientAge = DATEDIFF(YEAR, @EPatientDateOfBirth, GETDATE())
+PRINT 'Patient Age: ' + CAST(@IPatientAge AS NVARCHAR(10));
 -- check if patient is being assigned to the right ward
 PRINT CONCAT('Speciality: ', @IWardSpeciality);
 -- check for paed ward
@@ -62,7 +83,7 @@ IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC' OR UPPER(@IWardSpeciality) LIKE 'P
 BEGIN
 IF (@IPatientAge > 18 OR @IPatientAge < 15)
 BEGIN
-;THROW 500002, 'Attempted to assign patient to a ward for patients between 15 and 18 years of age', 1;
+;THROW 500002, 'Attempted to assign patient to a ward for patients between 15 and 18 years of age', 1
 END
 END
 -- check for paed15 ward
@@ -70,7 +91,7 @@ IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC15' OR UPPER(@IWardSpeciality) LIKE 
 BEGIN
 IF (@IPatientAge >= 15 OR @IPatientAge <= 13)
 BEGIN
-;THROW 500003, 'Attempted to assign patient to a ward for patients between 13 and 15 years of age', 1;
+;THROW 500003, 'Attempted to assign patient to a ward for patients between 13 and 15 years of age', 1
 END
 END
 -- check for paed13 ward
@@ -78,11 +99,40 @@ IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC13' OR UPPER(@IWardSpeciality) LIKE 
 BEGIN
 IF (@IPatientAge > 13)
 BEGIN
-;THROW 500004, 'Attempted to assign patient to a ward for patients under 13 years of age', 1;
+;THROW 500004, 'Attempted to assign patient to a ward for patients under 13 years of age', 1
 END
 END
--- check if care team is suitable 
+-- check if patient has covid
+IF (UPPER(@EPatientCovidStatus) LIKE 'POSITIVE')
+BEGIN
+print('check all team members')
+END
+-- check at least 1 doctor has correct speciality
+IF (@IDoctorsWithCorrectSpeciality < 1)
+BEGIN
+;throw 500006, 'Care team does not have at least 1 doctor with the speciality', 1 
+END
+-- check at least 1 nurse has correct speciality
+IF (@INursesWithCorrectSpeciality < 1)
+BEGIN
+;throw 500007, 'Care team does not have at least 1 nurse with the speciality', 1 
+END
 -- SUBSPROCS
+-- check if ward status needs updating to overflow
+IF (@IUpdateWardStatus = 1)
+BEGIN
+EXEC UpdateWardStatus @EWardId
+END
+-- record new patient and capture their id
+EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+-- assign patient to care teams in CareTeamTBL
+EXEC InsertIntoCareTeam @ECareTeamIDs, @INewPatientId
 -- SUCCESS MESSAGE
 print 'Patient successfully recorded'
 GO
+
+-- NOTE: Need to do:
+-- change CareTeamTBL priary key to comp. key w/ CareTeamID & PatientID 
+-- common table expression
+-- order by new id
+-- assign a nurse to any care team that doesnt have a nurse
