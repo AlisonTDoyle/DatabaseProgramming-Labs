@@ -9,8 +9,7 @@ ALTER proc [dbo].[ExamMaster]
 ,@EPatientDateOfBirth DATE
 ,@EPatientCovidStatus char(8)
 ,@EWardId INT
-,@ECareTeamIDs INT
--- need to update
+,@ECareTeamIDs PatientCareTeamsUDT READONLY
 as
 -- INTERNAL VARIABLES
 Declare 
@@ -27,17 +26,6 @@ SELECT @IDayOfTheWeek = DATENAME(WEEKDAY, GETDATE())
 SELECT @IWardCapacity = WardCapacity
 FROM [dbo].[WarDTBL]
 WHERE WardID = @EWardId
--- calculate todays capacity
-IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
-BEGIN
-    -- if weekend, take into account increased capacity
-    SELECT @IWardCapacityForToday = @IWardCapacity * 1.2
-END
-ELSE
-BEGIN
-    -- if weekday, capacity is normal
-    SELECT @IWardCapacityForToday = @IWardCapacity
-END
 -- get current no. of patients on ward
 SELECT @ICurrentWardPatientCount = COUNT(*)
 FROM [dbo].PatientTBL
@@ -50,11 +38,22 @@ SELECT @IWardSpeciality = WardSpeciality
 FROM [dbo].[WarDTBL]
 WHERE WardID = @EWardId
 -- BUSINESS LOGIC
+-- calculate todays capacity
+IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
+BEGIN
+-- if weekend, take into account increased capacity
+SELECT @IWardCapacityForToday = @IWardCapacity * 1.2
+END
+ELSE
+BEGIN
+-- if weekday, capacity is normal
+SELECT @IWardCapacityForToday = @IWardCapacity
+END
 -- check if patient will breach capacity
 IF ((@ICurrentWardPatientCount + 1) > @IWardCapacityForToday)
 BEGIN
-    -- alert user to ward capacity breach
-    ;throw 500001, 'Patient breaches ward capacity', 1
+-- alert user to ward capacity breach
+;throw 500001, 'Patient breaches ward capacity', 1
 END
 -- check if patient is being assigned to the right ward
 PRINT CONCAT('Speciality: ', @IWardSpeciality);
@@ -82,6 +81,7 @@ BEGIN
 ;THROW 500004, 'Attempted to assign patient to a ward for patients under 13 years of age', 1;
 END
 END
+-- check if care team is suitable 
 -- SUBSPROCS
 -- SUCCESS MESSAGE
 print 'Patient successfully recorded'
