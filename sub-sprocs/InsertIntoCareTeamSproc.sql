@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER ON
 GO
 ALTER proc [dbo].[InsertIntoCareTeam]
 -- external vairables
-@ECareTeamIDs PatientCareTeamsUDT READONLY
+@ECareTeamId INT
 , @EPatientId int
 as
 -- business logic
@@ -12,10 +12,7 @@ BEGIN TRY
 -- assign patient to care team
 UPDATE dbo.CareTeamTBL
 SET PatientID = @EPatientId
-WHERE CareTeamID = (
-    SELECT CareTeamID
-    FROM @ECareTeamIDs 
-)
+WHERE CareTeamID = @ECareTeamId
 END TRY
 BEGIN CATCH
 ;THROW

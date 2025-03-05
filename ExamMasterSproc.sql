@@ -9,7 +9,7 @@ ALTER proc [dbo].[ExamMaster]
 , @EPatientDateOfBirth DATE
 , @EPatientCovidStatus char(8)
 , @EWardId INT
-, @ECareTeamIDs PatientCareTeamsUDT READONLY
+, @ECareTeamId INT
 as
 -- INTERNAL VARIABLES
 Declare 
@@ -20,9 +20,7 @@ Declare
 , @IUpdateWardStatus BIT
 , @IPatientAge TINYINT
 , @IWardSpeciality CHAR(10)
-, @ICareTeamNurses CareTeamNursesUDT
-, @INursesWithCorrectSpeciality INT
-, @IDoctorsWithCorrectSpeciality INT
+, @ICareTeamsDoctors CareTeamDoctorsUDT
 , @INewPatientId INT
 -- READ DATA AND POPULATE INTERNAL VARIABLES
 -- get day of the week
@@ -39,14 +37,14 @@ WHERE PatientWarD = @EWardId
 SELECT @IWardSpeciality = WardSpeciality
 FROM [dbo].[WarDTBL]
 WHERE WardID = @EWardId
--- get nurses that are trying to be assigned to patient
--- INSERT INTO @ICareTeamNurses
--- (NurseId, CareTeamId, NurseSpeciality, NurseWard, Covid19Vaccinated)
--- SELECT *
--- FROM NurseCareTeamMembersTBL
--- INNER JOIN NurseTBL
--- ON NurseCareTeamMembersTBL.MemberID = NurseTBL.NurseID
--- WHERE NurseCareTeamMembersTBL.CareTeamID = @ECareTeamIDs
+-- get relevent doctors
+INSERT INTO @ICareTeamsDoctors
+(DoctorId, CareTeamId, DoctorSpecialty, Covid19Vaccinated)
+SELECT d.DoctorID, ct.CareTeamID, d.DoctorSpeciality, d.COVID19Vacinated
+FROM DoctorCareTeamMembersTBL as ct
+INNER JOIN DoctorTBL as d
+on ct.MemberID = d.DoctorID
+WHERE CareTeamID = @ECareTeamId
 -- BUSINESS LOGIC
 -- calculate todays capacity
 IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
@@ -107,16 +105,6 @@ IF (UPPER(@EPatientCovidStatus) LIKE 'POSITIVE')
 BEGIN
 print('check all team members')
 END
--- check at least 1 doctor has correct speciality
-IF (@IDoctorsWithCorrectSpeciality < 1)
-BEGIN
-;throw 500006, 'Care team does not have at least 1 doctor with the speciality', 1 
-END
--- check at least 1 nurse has correct speciality
-IF (@INursesWithCorrectSpeciality < 1)
-BEGIN
-;throw 500007, 'Care team does not have at least 1 nurse with the speciality', 1 
-END
 -- SUBSPROCS
 -- check if ward status needs updating to overflow
 IF (@IUpdateWardStatus = 1)
@@ -125,8 +113,8 @@ EXEC UpdateWardStatus @EWardId
 END
 -- record new patient and capture their id
 EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
--- assign patient to care teams in CareTeamTBL
-EXEC InsertIntoCareTeam @ECareTeamIDs, @INewPatientId
+-- assign patient to care team in CareTeamTBL
+EXEC InsertIntoCareTeam @ECareTeamID, @INewPatientId
 -- SUCCESS MESSAGE
 print 'Patient successfully recorded'
 GO
