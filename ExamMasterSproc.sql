@@ -21,6 +21,11 @@ Declare
 , @IPatientAge TINYINT
 , @IWardSpeciality CHAR(10)
 , @ICareTeamsDoctors CareTeamDoctorsUDT
+, @ICareTeamNurses CareTeamNursesUDT
+, @INumberOfDoctorsVaccinated INT
+, @INumberOfNursesVaccinated INT
+, @INumberOfDoctors INT
+, @INumberOfNurses INT
 , @INewPatientId INT
 -- READ DATA AND POPULATE INTERNAL VARIABLES
 -- get day of the week
@@ -45,6 +50,20 @@ FROM DoctorCareTeamMembersTBL as ct
 INNER JOIN DoctorTBL as d
 on ct.MemberID = d.DoctorID
 WHERE CareTeamID = @ECareTeamId
+-- count no. of doctors captured
+SELECT @INumberOfDoctors = COUNT(*)
+FROM @ICareTeamsDoctors
+-- get relevent nurses
+INSERT INTO @ICareTeamNurses
+(NurseId, CareTeamId, NurseSpeciality, NurseWard, Covid19Vaccinated)
+SELECT n.NurseID, ct.CareTeamID, n.NurseSpeciality, n.NurseWarD, n.COVID19Vacinated
+FROM NurseCareTeamMembersTBL as ct
+INNER JOIN NurseTBL as n
+on ct.MemberID = n.NurseID
+WHERE CareTeamID = @ECareTeamId
+-- count no. of nurses captured
+SELECT @INumberOfNurses = COUNT(*)
+FROM @ICareTeamNurses
 -- BUSINESS LOGIC
 -- calculate todays capacity
 IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
@@ -73,9 +92,7 @@ END
 END
 -- calculate patient age
 SELECT @IPatientAge = DATEDIFF(YEAR, @EPatientDateOfBirth, GETDATE())
-PRINT 'Patient Age: ' + CAST(@IPatientAge AS NVARCHAR(10));
 -- check if patient is being assigned to the right ward
-PRINT CONCAT('Speciality: ', @IWardSpeciality);
 -- check for paed ward
 IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC' OR UPPER(@IWardSpeciality) LIKE 'PAEDS')
 BEGIN
@@ -103,7 +120,39 @@ END
 -- check if patient has covid
 IF (UPPER(@EPatientCovidStatus) LIKE 'POSITIVE')
 BEGIN
-print('check all team members')
+-- count number of doctors vaccinated
+SELECT @INumberOfDoctorsVaccinated = COUNT(*)
+FROM @ICareTeamsDoctors
+WHERE Covid19Vaccinated = 1
+-- check if all doctors are vaccinated
+IF (@INumberOfDoctorsVaccinated < @INumberOfDoctors)
+BEGIN
+;THROW 500005, 'Not all doctors on care team are vaccinated', 1
+END
+-- count number of nurses vaccinated
+SELECT @INumberOfNursesVaccinated = COUNT(*)
+FROM @ICareTeamNurses
+WHERE Covid19Vaccinated = 1
+-- check if all nurses are vaccinated
+IF (@INumberOfNursesVaccinated < @INumberOfNurses)
+BEGIN
+;THROW 500006, 'Not all nurses on care team are vaccinated', 1
+END
+END
+-- check the min amount of staff are assigned to care team (1 doctor, 2 nurses)
+-- check number of doctors
+IF (@INumberOfDoctors < 1)
+BEGIN
+;THROW 500007, 'Care team does not have at least one active doctor', 1
+END
+-- check number of nurses
+IF (@INumberOfNurses < 1)
+BEGIN
+;THROW 500008, 'Care team does not have at least one active nurse', 1
+END
+ELSE IF (@INumberOfNurses = 1)
+BEGIN
+-- pick nurse
 END
 -- SUBSPROCS
 -- check if ward status needs updating to overflow
@@ -118,7 +167,6 @@ EXEC InsertIntoCareTeam @ECareTeamID, @INewPatientId
 -- SUCCESS MESSAGE
 print 'Patient successfully recorded'
 GO
-
 -- NOTE: Need to do:
 -- change CareTeamTBL priary key to comp. key w/ CareTeamID & PatientID 
 -- common table expression
