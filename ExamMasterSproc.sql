@@ -26,6 +26,8 @@ Declare
 , @INumberOfNursesVaccinated INT
 , @INumberOfDoctors INT
 , @INumberOfNurses INT
+, @INumberOfDoctorsWithCorrectSpeciality INT
+, @INumberOfNursessWithCorrectSpeciality INT
 , @INewPatientId INT
 -- READ DATA AND POPULATE INTERNAL VARIABLES
 -- get day of the week
@@ -153,6 +155,26 @@ END
 ELSE IF (@INumberOfNurses = 1)
 BEGIN
 -- pick nurse
+print('pick nurse')
+END
+-- check all staff have correct speciality
+-- count no. of doctors with correct speciality
+SELECT @INumberOfDoctorsWithCorrectSpeciality = COUNT(*)
+FROM @ICareTeamsDoctors
+WHERE UPPER(RIGHT(DoctorSpecialty, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
+-- check if enough doctors match speciality
+IF (@INumberOfDoctorsWithCorrectSpeciality < 1)
+BEGIN
+;THROW 500009, 'Care team does not have at least one doctor with the speciality', 1
+END
+-- count no. of nurses with correct speciality
+SELECT @INumberOfNursessWithCorrectSpeciality = COUNT(*)
+FROM @ICareTeamNurses
+WHERE UPPER(RIGHT(NurseSpeciality, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
+-- check if enough nurses match speciality
+IF (@INumberOfNursessWithCorrectSpeciality < 1)
+BEGIN
+;THROW 500010, 'Care team does not have at least one nurse with the speciality', 1
 END
 -- SUBSPROCS
 -- check if ward status needs updating to overflow
@@ -168,7 +190,5 @@ EXEC InsertIntoCareTeam @ECareTeamID, @INewPatientId
 print 'Patient successfully recorded'
 GO
 -- NOTE: Need to do:
--- change CareTeamTBL priary key to comp. key w/ CareTeamID & PatientID 
--- common table expression
 -- order by new id
 -- assign a nurse to any care team that doesnt have a nurse
