@@ -22,11 +22,13 @@ Declare
 , @IWardSpeciality CHAR(10)
 , @ICareTeamsDoctors CareTeamDoctorsUDT
 , @ICareTeamNurses CareTeamNursesUDT
-, @IUnassignedNursesOnWard CareTeamNursesUDT
+, @IAllUnassignedNursesOnWard UnassignedNursesUDT
+, @IVaccinatedUnassignedNursesOnWard UnassignedNursesUDT
 , @INumberOfDoctorsVaccinated INT
 , @INumberOfNursesVaccinated INT
 , @INumberOfDoctors INT
 , @INumberOfNurses INT
+, @INewCareTeamNurseId INT
 , @INumberOfDoctorsWithCorrectSpeciality INT
 , @INumberOfNursessWithCorrectSpeciality INT
 , @INewPatientId INT
@@ -67,10 +69,10 @@ WHERE CareTeamID = @ECareTeamId
 -- count no. of nurses captured
 SELECT @INumberOfNurses = COUNT(*)
 FROM @ICareTeamNurses
--- get unassigned nurses
-INSERT INTO @IUnassignedNursesOnWard
-(NurseId, CareTeamId, NurseSpeciality, NurseWard, Covid19Vaccinated)
-SELECT NurseID, 0, NurseSpeciality, NurseWarD, COVID19Vacinated
+-- get unassigned nurses on desired ward
+INSERT INTO @IAllUnassignedNursesOnWard
+(NurseId, NurseSpeciality, NurseWard, Covid19Vaccinated)
+SELECT NurseID, NurseSpeciality, NurseWarD, COVID19Vacinated
 FROM NurseTBL
 WHERE NurseWarD = @EWardId AND 3 > (
     SELECT COUNT(*)
@@ -165,8 +167,13 @@ BEGIN
 END
 ELSE IF (@INumberOfNurses = 1)
 BEGIN
--- pick an additional nurse if there is already only 1 on the care team
-print('pick nurse')
+-- check if assigned nurse will need to be vaccinated before dealing w/ patient
+IF (UPPER(@EPatientCovidStatus) LIKE UPPER("Positive"))
+BEGIN
+SELECT @INewCareTeamNurseId = TOP 1 NurseId
+FROM @IVaccinatedUnassignedNursesOnWard
+ORDER BY NurseID
+END
 END
 -- check all staff have correct speciality
 -- count no. of doctors with correct speciality
