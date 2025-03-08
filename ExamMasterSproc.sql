@@ -22,6 +22,7 @@ Declare
 , @IWardSpeciality CHAR(10)
 , @ICareTeamsDoctors CareTeamDoctorsUDT
 , @ICareTeamNurses CareTeamNursesUDT
+, @IUnassignedNursesOnWard CareTeamNursesUDT
 , @INumberOfDoctorsVaccinated INT
 , @INumberOfNursesVaccinated INT
 , @INumberOfDoctors INT
@@ -55,7 +56,7 @@ WHERE CareTeamID = @ECareTeamId
 -- count no. of doctors captured
 SELECT @INumberOfDoctors = COUNT(*)
 FROM @ICareTeamsDoctors
--- get relevent nurses
+-- get relevent care team nurses
 INSERT INTO @ICareTeamNurses
 (NurseId, CareTeamId, NurseSpeciality, NurseWard, Covid19Vaccinated)
 SELECT n.NurseID, ct.CareTeamID, n.NurseSpeciality, n.NurseWarD, n.COVID19Vacinated
@@ -66,6 +67,16 @@ WHERE CareTeamID = @ECareTeamId
 -- count no. of nurses captured
 SELECT @INumberOfNurses = COUNT(*)
 FROM @ICareTeamNurses
+-- get unassigned nurses
+INSERT INTO @IUnassignedNursesOnWard
+(NurseId, CareTeamId, NurseSpeciality, NurseWard, Covid19Vaccinated)
+SELECT NurseID, 0, NurseSpeciality, NurseWarD, COVID19Vacinated
+FROM NurseTBL
+WHERE NurseWarD = @EWardId AND 3 > (
+    SELECT COUNT(*)
+    FROM NurseCareTeamMembersTBL as ct
+    WHERE ct.MemberID = NurseID AND ct.CareTeamID != @ECareTeamId
+)
 -- BUSINESS LOGIC
 -- calculate todays capacity
 IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
@@ -154,7 +165,7 @@ BEGIN
 END
 ELSE IF (@INumberOfNurses = 1)
 BEGIN
--- pick nurse
+-- pick an additional nurse if there is already only 1 on the care team
 print('pick nurse')
 END
 -- check all staff have correct speciality
