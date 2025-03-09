@@ -27,6 +27,7 @@ Declare
 , @INumberOfDoctors INT
 , @INumberOfNurses INT
 , @IUnassignedNursesOnWard UnassignedNursesUDT
+, @INumberOfUnassignedNurses INT
 , @IUnassignedVaccinatedNurses UnassignedNursesUDT
 , @INewNurseId INT
 , @INumberOfDoctorsWithCorrectSpeciality INT
@@ -161,9 +162,57 @@ ELSE IF (@INumberOfNurses = 1)
     IF(UPPER(@EPatientCovidStatus) LIKE UPPER('Negative'))
         BEGIN
         -- if patient does not have covid, try to assign nurse from current ward to care team
-        SELECT *
-        FROM NurseTBL 
-        WHERE NurseWarD = @EWardId AND 
+        -- find nurses on ward that have less than 3 care teams and not already assigned to current care team
+        INSERT INTO @IUnassignedNursesOnWard
+            (NurseId, NurseSpeciality, NurseWard, Covid19Vaccinated)
+        SELECT NurseID, NurseSpeciality, NurseWarD, COVID19Vacinated
+        FROM NurseTBL AS n
+        WHERE n.NurseWard = @EWardId
+            AND (
+            SELECT COUNT(*)
+            FROM NurseCareTeamMembersTBL AS ct
+            WHERE ct.MemberID = n.NurseID
+        ) < 3
+            AND n.NurseID != (
+            SELECT NurseID
+            FROM @ICareTeamNurses
+        )
+        -- check if there was a suitable nurse on ward
+        SELECT @INumberOfUnassignedNurses = COUNT(*)
+        FROM @IUnassignedNursesOnWard
+        IF(@INumberOfUnassignedNurses = 0)
+        BEGIN
+            -- if no available nurses are found on current ward, check for nurses without any ward
+            INSERT INTO @IUnassignedNursesOnWard
+                (NurseId, NurseSpeciality, NurseWard, Covid19Vaccinated)
+            SELECT n.NurseID, n.NurseSpeciality, n.NurseWarD, n.COVID19Vacinated
+            FROM NurseTBL AS n
+                LEFT JOIN NurseCareTeamMembersTBL AS ct
+                ON n.NurseID = ct.MemberID
+            WHERE n.NurseWard IS NULL
+                AND 0 = (
+            SELECT COUNT(*)
+                FROM NurseCareTeamMembersTBL
+                WHERE MemberID = NurseID
+            )
+        END
+        -- get nurse by id ascending
+        SELECT TOP 1
+            @INewNurseId = NurseId
+        FROM @IUnassignedNursesOnWard
+        ORDER BY NurseId
+        -- assign to care team if a nurse was found
+        IF (@INewNurseId IS NOT NULL)
+        BEGIN
+            EXEC [dbo].[InsertNurse] @ECareTeamId, @INewNurseId
+        END
+        ELSE
+        BEGIN
+            -- still insert patient despite insuffient staff
+            EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+            -- alert user to error
+            ;THROW 500009, 'Could not find an extra nurse to assign to care team; Patient was recorded without care team', 1
+        END
     END
         ELSE
         BEGIN
@@ -179,7 +228,7 @@ ELSE IF (@INumberOfNurses = 1)
             AND n.NurseWard IS NULL
             AND 0 = (
             SELECT COUNT(*)
-            FROM CareTeamTBL
+            FROM NurseCareTeamMembersTBL
             WHERE MemberID = NurseID
             )
         -- get nurse by id ascending
@@ -187,7 +236,6 @@ ELSE IF (@INumberOfNurses = 1)
             @INewNurseId = NurseId
         FROM @IUnassignedVaccinatedNurses
         ORDER BY NurseId
-        PRINT CONCAT('Nurse ID: ', CAST(@INewNurseId AS VARCHAR(50)))
         -- assign to care team if a nurse was found
         IF (@INewNurseId IS NOT NULL)
         BEGIN
@@ -198,7 +246,7 @@ ELSE IF (@INumberOfNurses = 1)
             -- still insert patient despite insuffient staff
             EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
             -- alert user to error
-            ;THROW 500009, 'Could not find an extra nurse to assign to care team; Patient was recorded without care team', 1
+            ;THROW 500010, 'Could not find an extra vaccinated nurse to assign to care team; Patient was recorded without care team', 1
         END
     END
 END
@@ -210,7 +258,7 @@ WHERE UPPER(RIGHT(DoctorSpecialty, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
 -- check if enough doctors match speciality
 IF (@INumberOfDoctorsWithCorrectSpeciality < 1)
 BEGIN
-    ;THROW 500010, 'Care team does not have at least one doctor with the speciality', 1
+    ;THROW 500011, 'Care team does not have at least one doctor with the speciality', 1
 END
 -- count no. of nurses with correct speciality
 SELECT @INumberOfNursessWithCorrectSpeciality = COUNT(*)
@@ -219,7 +267,7 @@ WHERE UPPER(RIGHT(NurseSpeciality, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
 -- check if enough nurses match speciality
 IF (@INumberOfNursessWithCorrectSpeciality < 1)
 BEGIN
-    ;THROW 500011, 'Care team does not have at least one nurse with the speciality', 1
+    ;THROW 500012, 'Care team does not have at least one nurse with the speciality', 1
 END
 -- SUBSPROCS
 -- check if ward status needs updating to overflow
@@ -234,6 +282,3 @@ EXEC InsertIntoCareTeam @ECareTeamID, @INewPatientId
 -- SUCCESS MESSAGE
 print 'Patient successfully recorded'
 GO
--- NOTE: Need to do:
--- order by new id
--- assign a nurse to any care team that doesnt have a nurse
