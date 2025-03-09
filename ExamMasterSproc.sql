@@ -3,13 +3,18 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 ALTER proc [dbo].[ExamMaster]
--- EXTERNAL VARIABLES
-@EPatientFirstName VARCHAR(35)
-, @EPatientLastName VARCHAR(35)
-, @EPatientDateOfBirth DATE
-, @EPatientCovidStatus char(8)
-, @EWardId INT
-, @ECareTeamId INT
+    -- EXTERNAL VARIABLES
+    @EPatientFirstName VARCHAR(35)
+,
+    @EPatientLastName VARCHAR(35)
+,
+    @EPatientDateOfBirth DATE
+,
+    @EPatientCovidStatus char(8)
+,
+    @EWardId INT
+,
+    @ECareTeamId INT
 as
 -- INTERNAL VARIABLES
 Declare 
@@ -33,6 +38,7 @@ Declare
 , @INumberOfDoctorsWithCorrectSpeciality INT
 , @INumberOfNursessWithCorrectSpeciality INT
 , @INewPatientId INT
+, @IErrorMessage VARCHAR(150)
 -- READ DATA AND POPULATE INTERNAL VARIABLES
 -- get day of the week
 SELECT @IDayOfTheWeek = DATENAME(WEEKDAY, GETDATE())
@@ -85,8 +91,17 @@ END
 -- check if patient will breach capacity
 IF ((@ICurrentWardPatientCount + 1) > @IWardCapacityForToday)
 BEGIN
+    SELECT @IErrorMessage = CONCAT(
+    'This ward is full - Find a different ward for ',
+    UPPER(SUBSTRING(@EPatientFirstName, 1, 1)),
+    LOWER(SUBSTRING(@EPatientFirstName, 2, LEN(@EPatientFirstName)-1)),
+    ' ',
+    UPPER(SUBSTRING(@EPatientLastName, 1, 1)),
+    LOWER(SUBSTRING(@EPatientLastName, 2, LEN(@EPatientLastName)-1))
+)
+
     -- alert user to ward capacity breach
-    ;throw 500001, 'Patient breaches ward capacity', 1
+    ;throw 500001, @IErrorMessage, 1
 END
 -- check if ward is starting to overflow (only applicable to weekends)
 IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
