@@ -22,13 +22,13 @@ Declare
 , @IWardSpeciality CHAR(10)
 , @ICareTeamsDoctors CareTeamDoctorsUDT
 , @ICareTeamNurses CareTeamNursesUDT
-, @IAllUnassignedNursesOnWard UnassignedNursesUDT
-, @IVaccinatedUnassignedNursesOnWard UnassignedNursesUDT
 , @INumberOfDoctorsVaccinated INT
 , @INumberOfNursesVaccinated INT
 , @INumberOfDoctors INT
 , @INumberOfNurses INT
-, @INewCareTeamNurseId INT
+, @IUnassignedNursesOnWard UnassignedNursesUDT
+, @IUnassignedVaccinatedNurses UnassignedNursesUDT
+, @INewNurseId INT
 , @INumberOfDoctorsWithCorrectSpeciality INT
 , @INumberOfNursessWithCorrectSpeciality INT
 , @INewPatientId INT
@@ -49,61 +49,51 @@ FROM [dbo].[WarDTBL]
 WHERE WardID = @EWardId
 -- get relevent doctors
 INSERT INTO @ICareTeamsDoctors
-(DoctorId, CareTeamId, DoctorSpecialty, Covid19Vaccinated)
+    (DoctorId, CareTeamId, DoctorSpecialty, Covid19Vaccinated)
 SELECT d.DoctorID, ct.CareTeamID, d.DoctorSpeciality, d.COVID19Vacinated
 FROM DoctorCareTeamMembersTBL as ct
-INNER JOIN DoctorTBL as d
-on ct.MemberID = d.DoctorID
+    INNER JOIN DoctorTBL as d
+    on ct.MemberID = d.DoctorID
 WHERE CareTeamID = @ECareTeamId
 -- count no. of doctors captured
 SELECT @INumberOfDoctors = COUNT(*)
 FROM @ICareTeamsDoctors
 -- get relevent care team nurses
 INSERT INTO @ICareTeamNurses
-(NurseId, CareTeamId, NurseSpeciality, NurseWard, Covid19Vaccinated)
+    (NurseId, CareTeamId, NurseSpeciality, NurseWard, Covid19Vaccinated)
 SELECT n.NurseID, ct.CareTeamID, n.NurseSpeciality, n.NurseWarD, n.COVID19Vacinated
 FROM NurseCareTeamMembersTBL as ct
-INNER JOIN NurseTBL as n
-on ct.MemberID = n.NurseID
+    INNER JOIN NurseTBL as n
+    on ct.MemberID = n.NurseID
 WHERE CareTeamID = @ECareTeamId
 -- count no. of nurses captured
 SELECT @INumberOfNurses = COUNT(*)
 FROM @ICareTeamNurses
--- get unassigned nurses on desired ward
-INSERT INTO @IAllUnassignedNursesOnWard
-(NurseId, NurseSpeciality, NurseWard, Covid19Vaccinated)
-SELECT NurseID, NurseSpeciality, NurseWarD, COVID19Vacinated
-FROM NurseTBL
-WHERE NurseWarD = @EWardId AND 3 > (
-    SELECT COUNT(*)
-    FROM NurseCareTeamMembersTBL as ct
-    WHERE ct.MemberID = NurseID AND ct.CareTeamID != @ECareTeamId
-)
 -- BUSINESS LOGIC
 -- calculate todays capacity
 IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
 BEGIN
--- if weekend, take into account increased capacity
-SELECT @IWardCapacityForToday = @IWardCapacity * 1.2
+    -- if weekend, take into account increased capacity
+    SELECT @IWardCapacityForToday = @IWardCapacity * 1.2
 END
 ELSE
 BEGIN
--- if weekday, capacity is normal
-SELECT @IWardCapacityForToday = @IWardCapacity
+    -- if weekday, capacity is normal
+    SELECT @IWardCapacityForToday = @IWardCapacity
 END
 -- check if patient will breach capacity
 IF ((@ICurrentWardPatientCount + 1) > @IWardCapacityForToday)
 BEGIN
--- alert user to ward capacity breach
-;throw 500001, 'Patient breaches ward capacity', 1
+    -- alert user to ward capacity breach
+    ;throw 500001, 'Patient breaches ward capacity', 1
 END
 -- check if ward is starting to overflow (only applicable to weekends)
 IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
 BEGIN
-IF (((@ICurrentWardPatientCount + 1) > @IWardCapacity) AND ((@ICurrentWardPatientCount + 1) <= @IWardCapacityForToday))
+    IF (((@ICurrentWardPatientCount + 1) > @IWardCapacity) AND ((@ICurrentWardPatientCount + 1) <= @IWardCapacityForToday))
 BEGIN
-SELECT @IUpdateWardStatus = 1
-END
+        SELECT @IUpdateWardStatus = 1
+    END
 END
 -- calculate patient age
 SELECT @IPatientAge = DATEDIFF(YEAR, @EPatientDateOfBirth, GETDATE())
@@ -111,71 +101,108 @@ SELECT @IPatientAge = DATEDIFF(YEAR, @EPatientDateOfBirth, GETDATE())
 -- check for paed ward
 IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC' OR UPPER(@IWardSpeciality) LIKE 'PAEDS')
 BEGIN
-IF (@IPatientAge > 18 OR @IPatientAge < 15)
+    IF (@IPatientAge > 18 OR @IPatientAge < 15)
 BEGIN
-;THROW 500002, 'Attempted to assign patient to a ward for patients between 15 and 18 years of age', 1
-END
+        ;THROW 500002, 'Attempted to assign patient to a ward for patients between 15 and 18 years of age', 1
+    END
 END
 -- check for paed15 ward
 IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC15' OR UPPER(@IWardSpeciality) LIKE 'PAEDS15')
 BEGIN
-IF (@IPatientAge >= 15 OR @IPatientAge <= 13)
+    IF (@IPatientAge >= 15 OR @IPatientAge <= 13)
 BEGIN
-;THROW 500003, 'Attempted to assign patient to a ward for patients between 13 and 15 years of age', 1
-END
+        ;THROW 500003, 'Attempted to assign patient to a ward for patients between 13 and 15 years of age', 1
+    END
 END
 -- check for paed13 ward
 IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC13' OR UPPER(@IWardSpeciality) LIKE 'PAEDS13')
 BEGIN
-IF (@IPatientAge > 13)
+    IF (@IPatientAge > 13)
 BEGIN
-;THROW 500004, 'Attempted to assign patient to a ward for patients under 13 years of age', 1
-END
+        ;THROW 500004, 'Attempted to assign patient to a ward for patients under 13 years of age', 1
+    END
 END
 -- check if patient has covid
 IF (UPPER(@EPatientCovidStatus) LIKE 'POSITIVE')
 BEGIN
--- count number of doctors vaccinated
-SELECT @INumberOfDoctorsVaccinated = COUNT(*)
-FROM @ICareTeamsDoctors
-WHERE Covid19Vaccinated = 1
--- check if all doctors are vaccinated
-IF (@INumberOfDoctorsVaccinated < @INumberOfDoctors)
+    -- count number of doctors vaccinated
+    SELECT @INumberOfDoctorsVaccinated = COUNT(*)
+    FROM @ICareTeamsDoctors
+    WHERE Covid19Vaccinated = 1
+    -- check if all doctors are vaccinated
+    IF (@INumberOfDoctorsVaccinated < @INumberOfDoctors)
 BEGIN
-;THROW 500005, 'Not all doctors on care team are vaccinated', 1
-END
--- count number of nurses vaccinated
-SELECT @INumberOfNursesVaccinated = COUNT(*)
-FROM @ICareTeamNurses
-WHERE Covid19Vaccinated = 1
--- check if all nurses are vaccinated
-IF (@INumberOfNursesVaccinated < @INumberOfNurses)
+        ;THROW 500005, 'Not all doctors on care team are vaccinated', 1
+    END
+    -- count number of nurses vaccinated
+    SELECT @INumberOfNursesVaccinated = COUNT(*)
+    FROM @ICareTeamNurses
+    WHERE Covid19Vaccinated = 1
+    -- check if all nurses are vaccinated
+    IF (@INumberOfNursesVaccinated < @INumberOfNurses)
 BEGIN
-;THROW 500006, 'Not all nurses on care team are vaccinated', 1
-END
+        ;THROW 500006, 'Not all nurses on care team are vaccinated', 1
+    END
 END
 -- check the min amount of staff are assigned to care team (1 doctor, 2 nurses)
 -- check number of doctors
-IF (@INumberOfDoctors < 1)
+IF (@INumberOfDoctors = 0)
 BEGIN
-;THROW 500007, 'Care team does not have at least one active doctor', 1
+    ;THROW 500007, 'Care team does not have at least one active doctor', 1
 END
 -- check number of nurses
-IF (@INumberOfNurses < 1)
+IF (@INumberOfNurses = 0)
 BEGIN
-;THROW 500008, 'Care team does not have at least one active nurse', 1
+    ;THROW 500008, 'Care team does not have at least one active nurse', 1
 END
 ELSE IF (@INumberOfNurses = 1)
-BEGIN
--- check if assigned nurse will need to be vaccinated before dealing w/ patient
-IF (UPPER(@EPatientCovidStatus) LIKE UPPER("Positive"))
-BEGIN
-SELECT @INewCareTeamNurseId = TOP 1 NurseId
-FROM @IVaccinatedUnassignedNursesOnWard
-ORDER BY NurseID
+    BEGIN
+    -- check patient covid status to decide on what type of nurse to select
+    IF(UPPER(@EPatientCovidStatus) LIKE UPPER('Negative'))
+        BEGIN
+        -- if patient does not have covid, try to assign nurse from current ward to care team
+        SELECT *
+        FROM NurseTBL 
+        WHERE NurseWarD = @EWardId AND 
+    END
+        ELSE
+        BEGIN
+        -- if patient covid status is unknown or negative, try to assign a vaccinated nurse w/ no ward or team
+        -- find vaccinated nurses without a care team or ward
+        INSERT INTO @IUnassignedVaccinatedNurses
+            (NurseId, NurseSpeciality, NurseWard, Covid19Vaccinated)
+        SELECT n.NurseID, n.NurseSpeciality, n.NurseWarD, n.COVID19Vacinated
+        FROM NurseTBL AS n
+            LEFT JOIN NurseCareTeamMembersTBL AS ct
+            ON n.NurseID = ct.MemberID
+        WHERE n.COVID19Vacinated = 1
+            AND n.NurseWard IS NULL
+            AND 0 = (
+            SELECT COUNT(*)
+            FROM CareTeamTBL
+            WHERE MemberID = NurseID
+            )
+        -- get nurse by id ascending
+        SELECT TOP 1
+            @INewNurseId = NurseId
+        FROM @IUnassignedVaccinatedNurses
+        ORDER BY NurseId
+        PRINT CONCAT('Nurse ID: ', CAST(@INewNurseId AS VARCHAR(50)))
+        -- assign to care team if a nurse was found
+        IF (@INewNurseId IS NOT NULL)
+        BEGIN
+            EXEC [dbo].[InsertNurse] @ECareTeamId, @INewNurseId
+        END
+        ELSE
+        BEGIN
+            -- still insert patient despite insuffient staff
+            EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+            -- alert user to error
+            ;THROW 500009, 'Could not find an extra nurse to assign to care team; Patient was recorded without care team', 1
+        END
+    END
 END
-END
--- check all staff have correct speciality
+-- check staff have correct speciality
 -- count no. of doctors with correct speciality
 SELECT @INumberOfDoctorsWithCorrectSpeciality = COUNT(*)
 FROM @ICareTeamsDoctors
@@ -183,7 +210,7 @@ WHERE UPPER(RIGHT(DoctorSpecialty, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
 -- check if enough doctors match speciality
 IF (@INumberOfDoctorsWithCorrectSpeciality < 1)
 BEGIN
-;THROW 500009, 'Care team does not have at least one doctor with the speciality', 1
+    ;THROW 500010, 'Care team does not have at least one doctor with the speciality', 1
 END
 -- count no. of nurses with correct speciality
 SELECT @INumberOfNursessWithCorrectSpeciality = COUNT(*)
@@ -192,13 +219,13 @@ WHERE UPPER(RIGHT(NurseSpeciality, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
 -- check if enough nurses match speciality
 IF (@INumberOfNursessWithCorrectSpeciality < 1)
 BEGIN
-;THROW 500010, 'Care team does not have at least one nurse with the speciality', 1
+    ;THROW 500011, 'Care team does not have at least one nurse with the speciality', 1
 END
 -- SUBSPROCS
 -- check if ward status needs updating to overflow
 IF (@IUpdateWardStatus = 1)
 BEGIN
-EXEC UpdateWardStatus @EWardId
+    EXEC UpdateWardStatus @EWardId
 END
 -- record new patient and capture their id
 EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
