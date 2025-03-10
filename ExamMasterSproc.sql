@@ -157,6 +157,7 @@ BEGIN
     -- check if all nurses are vaccinated
     IF (@INumberOfNursesVaccinated < @INumberOfNurses)
 BEGIN
+        print 'before'
         -- still insert patient despite unvaccinated staff
         EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
         ;THROW 500006, 'Not all nurses on care team are vaccinated; Patient was recorded without care team', 1
