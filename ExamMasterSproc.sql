@@ -3,19 +3,16 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 ALTER proc [dbo].[ExamMaster]
-    -- EXTERNAL VARIABLES
-    @EPatientFirstName VARCHAR(35)
-,
-    @EPatientLastName VARCHAR(35)
-,
-    @EPatientDateOfBirth DATE
-,
-    @EPatientCovidStatus char(8)
-,
-    @EWardId INT
-,
-    @ECareTeamId INT
+-- EXTERNAL VARIABLES
+@EPatientFirstName VARCHAR(35)
+, @EPatientLastName VARCHAR(35)
+, @EPatientDateOfBirth DATE
+, @EPatientCovidStatus char(8)
+, @EWardId INT
+, @ECareTeamId INT
 as
+-- turn of 'x no of rows affected' messages
+SET NOCOUNT ON;
 -- INTERNAL VARIABLES
 Declare 
 @IDayOfTheWeek VARCHAR(9)

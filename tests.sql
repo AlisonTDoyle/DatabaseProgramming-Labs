@@ -1,0 +1,65 @@
+-- ward capacity rule test
+-- insert patient into full ward
+BEGIN TRY
+    PRINT 'insert patient into full ward'
+    EXEC [dbo].ExamMaster "jack", "underkofler", "2005-03-01", "Negative", 4, 1
+END TRY
+BEGIN CATCH
+    PRINT ERROR_MESSAGE()
+END CATCH
+-- ward age rules tests
+-- insert patient under 13 into appropriate ward
+BEGIN TRY
+    PRINT ' '
+    PRINT 'insert patient under 13 into appropriate ward'
+    EXEC [dbo].ExamMaster "Jane", "Doe", "2016-03-01", "Negative", 1, 1
+END TRY
+BEGIN CATCH
+    PRINT ERROR_MESSAGE()
+END CATCH
+-- insert patient under 13 into inappropriate ward (15-18 yrs old)
+BEGIN TRY
+    PRINT ' '
+    PRINT 'insert patient under 13 into inappropriate ward (15-18 yrs old)'
+    EXEC [dbo].[ExamMaster] "John", "Doe", "2016-03-01", "Negative", 3, 1
+END TRY
+BEGIN CATCH
+    PRINT ERROR_MESSAGE()
+END CATCH
+-- care team rules tests
+-- insert patient with care team with no doctor
+BEGIN TRY
+    PRINT ' '
+    PRINT 'insert into care team with no doctor'
+    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Negative", 3, 2
+END TRY
+BEGIN CATCH
+    PRINT ERROR_MESSAGE()
+END CATCH
+-- insert patient with care team with no nurse
+BEGIN TRY
+    PRINT ' '
+    PRINT 'insert into care team with no nurse'
+    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Negative", 3, 3
+END TRY
+BEGIN CATCH
+    PRINT ERROR_MESSAGE()
+END CATCH
+-- insert patient with care team with 1 nurse
+BEGIN TRY
+    PRINT ' '
+    PRINT 'insert into care team with 1 nurse'
+    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Negative", 3, 4
+END TRY
+BEGIN CATCH
+    PRINT ERROR_MESSAGE()
+END CATCH
+-- insert patient with covid
+BEGIN TRY
+    PRINT ' '
+    PRINT 'insert into care team with 1 nurse'
+    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Negative", 3, 4
+END TRY
+BEGIN CATCH
+    PRINT ERROR_MESSAGE()
+END CATCH
