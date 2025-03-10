@@ -302,7 +302,7 @@ BEGIN
     EXEC UpdateWardStatus @EWardId
 END
 -- record new patient and capture their id
-EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
 -- assign patient to care team in CareTeamTBL
 EXEC InsertIntoCareTeam @ECareTeamID, @INewPatientId
 -- SUCCESS MESSAGE
