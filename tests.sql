@@ -58,7 +58,7 @@ END CATCH
 BEGIN TRY
     PRINT ' '
     PRINT 'insert into care team with unvaccinated doctor'
-    EXEC [dbo].[ExamMaster] "unvac", "Doe", "2008-03-01", "POSITIVE", 4, 4
+    EXEC [dbo].[ExamMaster] "unvac", "Doe", "2008-03-01", "POSITIVE", 4, 6
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
@@ -67,7 +67,7 @@ END CATCH
 BEGIN TRY
     PRINT ' '
     PRINT 'insert into care team with unvaccinated nurse'
-    EXEC [dbo].[ExamMaster] "unvac", "nurse", "2008-03-01", "Positive", 4, 7
+    EXEC [dbo].[ExamMaster] "unvac", "nurse", "2008-03-01", "Positive", 4, 8
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
@@ -76,7 +76,7 @@ END CATCH
 BEGIN TRY
     PRINT ' '
     PRINT 'insert into care team with doctor with incorrect speciality'
-    EXEC [dbo].[ExamMaster] "incorrect", "speciality", "2008-03-01", "Positive", 4, 7
+    EXEC [dbo].[ExamMaster] "incorrect", "speciality", "2008-03-01", "Positive", 4, 9
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
