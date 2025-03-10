@@ -54,20 +54,20 @@ END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
 END CATCH
--- insert patient with covid with an unvaccinated care team
+-- insert patient with covid with an unvaccinated doctor
 BEGIN TRY
     PRINT ' '
-    PRINT 'insert into care team with 1 nurse'
-    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Positive", 4, 4
+    PRINT 'insert into care team with unvaccinated doctor'
+    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Positive", 4, 6
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
 END CATCH
--- insert patient with covid with a vaccinated care team
+-- insert patient with covid with an unvaccinated doctor
 BEGIN TRY
     PRINT ' '
-    PRINT 'insert into care team with 1 nurse'
-    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Positive", 3, 4
+    PRINT 'insert into care team with unvaccinated nurse'
+    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Positive", 4, 6
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()

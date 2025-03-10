@@ -96,7 +96,6 @@ BEGIN
     UPPER(SUBSTRING(@EPatientLastName, 1, 1)),
     LOWER(SUBSTRING(@EPatientLastName, 2, LEN(@EPatientLastName)-1))
 )
-
     -- alert user to ward capacity breach
     ;throw 500001, @IErrorMessage, 1
 END
@@ -138,6 +137,7 @@ END
 -- check if patient has covid
 IF (UPPER(@EPatientCovidStatus) LIKE 'POSITIVE')
 BEGIN
+    print ('patient postive')
     -- count number of doctors vaccinated
     SELECT @INumberOfDoctorsVaccinated = COUNT(*)
     FROM @ICareTeamsDoctors
@@ -145,6 +145,7 @@ BEGIN
     -- check if all doctors are vaccinated
     IF (@INumberOfDoctorsVaccinated < @INumberOfDoctors)
     BEGIN
+        print 'not all doctors vaccinated'
         -- still insert patient despite unvaccinated staff
         EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
         ;THROW 500005, 'Not all doctors on care team are vaccinated; Patient was recorded without care team', 1
