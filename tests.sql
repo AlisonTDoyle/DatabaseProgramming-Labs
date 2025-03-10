@@ -2,7 +2,7 @@
 -- insert patient into full ward
 BEGIN TRY
     PRINT 'insert patient into full ward'
-    EXEC [dbo].ExamMaster "jack", "underkofler", "2005-03-01", "Negative", 4, 1
+    EXEC [dbo].ExamMaster "jack", "underkofler", "2005-03-01", "Negative", 1, 1
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
@@ -12,7 +12,7 @@ END CATCH
 BEGIN TRY
     PRINT ' '
     PRINT 'insert patient under 13 into appropriate ward'
-    EXEC [dbo].ExamMaster "Jane", "Doe", "2016-03-01", "Negative", 1, 1
+    EXEC [dbo].ExamMaster "Jane", "Doe", "2013-03-01", "Negative", 2, 2
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
@@ -31,7 +31,7 @@ END CATCH
 BEGIN TRY
     PRINT ' '
     PRINT 'insert into care team with no doctor'
-    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Negative", 3, 2
+    EXEC [dbo].[ExamMaster] "No", "Doctor", "2008-03-01", "Negative", 4, 3
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
@@ -40,7 +40,7 @@ END CATCH
 BEGIN TRY
     PRINT ' '
     PRINT 'insert into care team with no nurse'
-    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Negative", 3, 3
+    EXEC [dbo].[ExamMaster] "No", "Nurse", "2008-03-01", "Negative", 4, 4
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
@@ -49,7 +49,7 @@ END CATCH
 BEGIN TRY
     PRINT ' '
     PRINT 'insert into care team with 1 nurse'
-    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Negative", 3, 4
+    EXEC [dbo].[ExamMaster] "One", "Nurse", "2008-03-01", "Negative", 4, 5
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()
@@ -58,7 +58,7 @@ END CATCH
 BEGIN TRY
     PRINT ' '
     PRINT 'insert into care team with 1 nurse'
-    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Positive", 3, 4
+    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Positive", 4, 4
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()

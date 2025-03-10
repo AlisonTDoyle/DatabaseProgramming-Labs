@@ -144,8 +144,10 @@ BEGIN
     WHERE Covid19Vaccinated = 1
     -- check if all doctors are vaccinated
     IF (@INumberOfDoctorsVaccinated < @INumberOfDoctors)
-BEGIN
-        ;THROW 500005, 'Not all doctors on care team are vaccinated', 1
+    BEGIN
+        -- still insert patient despite unvaccinated staff
+        EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+        ;THROW 500005, 'Not all doctors on care team are vaccinated; Patient was recorded without care team', 1
     END
     -- count number of nurses vaccinated
     SELECT @INumberOfNursesVaccinated = COUNT(*)
@@ -154,19 +156,25 @@ BEGIN
     -- check if all nurses are vaccinated
     IF (@INumberOfNursesVaccinated < @INumberOfNurses)
 BEGIN
-        ;THROW 500006, 'Not all nurses on care team are vaccinated', 1
+        -- still insert patient despite unvaccinated staff
+        EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+        ;THROW 500006, 'Not all nurses on care team are vaccinated; Patient was recorded without care team', 1
     END
 END
 -- check the min amount of staff are assigned to care team (1 doctor, 2 nurses)
 -- check number of doctors
 IF (@INumberOfDoctors = 0)
 BEGIN
-    ;THROW 500007, 'Care team does not have at least one active doctor', 1
+    -- still insert patient despite insuffient staff
+    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+    ;THROW 500007, 'Care team does not have at least one active doctor; Patient was recorded without care team', 1
 END
 -- check number of nurses
 IF (@INumberOfNurses = 0)
 BEGIN
-    ;THROW 500008, 'Care team does not have at least one active nurse', 1
+    -- still insert patient despite insuffient staff
+    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+    ;THROW 500008, 'Care team does not have at least one active nurse; Patient was recorded without care team', 1
 END
 ELSE IF (@INumberOfNurses = 1)
     BEGIN
@@ -270,7 +278,9 @@ WHERE UPPER(RIGHT(DoctorSpecialty, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
 -- check if enough doctors match speciality
 IF (@INumberOfDoctorsWithCorrectSpeciality < 1)
 BEGIN
-    ;THROW 500011, 'Care team does not have at least one doctor with the speciality', 1
+    -- still insert patient despite insuffient staff
+    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+    ;THROW 500011, 'Care team does not have at least one doctor with the speciality; Patient was recorded without care team', 1
 END
 -- count no. of nurses with correct speciality
 SELECT @INumberOfNursessWithCorrectSpeciality = COUNT(*)
@@ -279,7 +289,9 @@ WHERE UPPER(RIGHT(NurseSpeciality, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
 -- check if enough nurses match speciality
 IF (@INumberOfNursessWithCorrectSpeciality < 1)
 BEGIN
-    ;THROW 500012, 'Care team does not have at least one nurse with the speciality', 1
+    -- still insert patient despite insuffient staff
+    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+    ;THROW 500012, 'Care team does not have at least one nurse with the speciality; Patient was recorded without care team', 1
 END
 -- SUBSPROCS
 -- check if ward status needs updating to overflow
