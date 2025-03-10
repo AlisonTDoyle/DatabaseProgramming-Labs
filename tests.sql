@@ -58,7 +58,7 @@ END CATCH
 BEGIN TRY
     PRINT ' '
     PRINT 'insert into care team with unvaccinated doctor'
-    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "Positive", 4, 6
+    EXEC [dbo].[ExamMaster] "John", "Doe", "2008-03-01", "POSITIVE", 4, 4
 END TRY
 BEGIN CATCH
     PRINT ERROR_MESSAGE()

@@ -137,7 +137,6 @@ END
 -- check if patient has covid
 IF (UPPER(@EPatientCovidStatus) LIKE 'POSITIVE')
 BEGIN
-    print ('patient postive')
     -- count number of doctors vaccinated
     SELECT @INumberOfDoctorsVaccinated = COUNT(*)
     FROM @ICareTeamsDoctors
@@ -145,9 +144,10 @@ BEGIN
     -- check if all doctors are vaccinated
     IF (@INumberOfDoctorsVaccinated < @INumberOfDoctors)
     BEGIN
-        print 'not all doctors vaccinated'
-        -- still insert patient despite unvaccinated staff
-        EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+        -- still insert patient despite unvaccinated staff    
+        -- have to double up on error messages because i was having issues with the ;throw after the exec statment
+        RAISERROR ('Not all doctors on care team are vaccinated; Patient was recorded without care team', 10, 1)
+        EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
         ;THROW 500005, 'Not all doctors on care team are vaccinated; Patient was recorded without care team', 1
     END
     -- count number of nurses vaccinated
@@ -156,10 +156,10 @@ BEGIN
     WHERE Covid19Vaccinated = 1
     -- check if all nurses are vaccinated
     IF (@INumberOfNursesVaccinated < @INumberOfNurses)
-BEGIN
-        print 'before'
+    BEGIN
         -- still insert patient despite unvaccinated staff
-        EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+        RAISERROR ('Not all nurses on care team are vaccinated; Patient was recorded without care team', 10, 1)
+        EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
         ;THROW 500006, 'Not all nurses on care team are vaccinated; Patient was recorded without care team', 1
     END
 END
@@ -168,14 +168,16 @@ END
 IF (@INumberOfDoctors = 0)
 BEGIN
     -- still insert patient despite insuffient staff
-    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+    RAISERROR ('Care team does not have at least one active doctor; Patient was recorded without care team', 10, 1)
+    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
     ;THROW 500007, 'Care team does not have at least one active doctor; Patient was recorded without care team', 1
 END
 -- check number of nurses
 IF (@INumberOfNurses = 0)
 BEGIN
     -- still insert patient despite insuffient staff
-    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+    RAISERROR ('Care team does not have at least one active nurse; Patient was recorded without care team', 10, 1)
+    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
     ;THROW 500008, 'Care team does not have at least one active nurse; Patient was recorded without care team', 1
 END
 ELSE IF (@INumberOfNurses = 1)
@@ -231,8 +233,8 @@ ELSE IF (@INumberOfNurses = 1)
         ELSE
         BEGIN
             -- still insert patient despite insuffient staff
-            EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
-            -- alert user to error
+            RAISERROR ('Could not find an extra nurse to assign to care team; Patient was recorded without care team', 10, 1)
+            EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
             ;THROW 500009, 'Could not find an extra nurse to assign to care team; Patient was recorded without care team', 1
         END
     END
@@ -266,8 +268,8 @@ ELSE IF (@INumberOfNurses = 1)
         ELSE
         BEGIN
             -- still insert patient despite insuffient staff
-            EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
-            -- alert user to error
+            RAISERROR ('Could not find an extra vaccinated nurse to assign to care team; Patient was recorded without care team', 10, 1)
+            EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
             ;THROW 500010, 'Could not find an extra vaccinated nurse to assign to care team; Patient was recorded without care team', 1
         END
     END
@@ -281,7 +283,8 @@ WHERE UPPER(RIGHT(DoctorSpecialty, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
 IF (@INumberOfDoctorsWithCorrectSpeciality < 1)
 BEGIN
     -- still insert patient despite insuffient staff
-    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+    RAISERROR ('Care team does not have at least one doctor with the speciality; Patient was recorded without care team', 10, 1)
+    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
     ;THROW 500011, 'Care team does not have at least one doctor with the speciality; Patient was recorded without care team', 1
 END
 -- count no. of nurses with correct speciality
@@ -292,7 +295,8 @@ WHERE UPPER(RIGHT(NurseSpeciality, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
 IF (@INumberOfNursessWithCorrectSpeciality < 1)
 BEGIN
     -- still insert patient despite insuffient staff
-    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId
+    RAISERROR ('Care team does not have at least one nurse with the speciality; Patient was recorded without care team', 10, 1)
+    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
     ;THROW 500012, 'Care team does not have at least one nurse with the speciality; Patient was recorded without care team', 1
 END
 -- SUBSPROCS

@@ -21,7 +21,7 @@ VALUES
 SELECT @EPatientId = SCOPE_IDENTITY()
 END TRY
 BEGIN CATCH
-;throw
+;throw 500001, 'Something went wrong inserting patient', 1
 END CATCH
 -- success message
 RAISERROR ('Patient has been inserted', 16, 1)
