@@ -59,6 +59,7 @@ FROM DoctorCareTeamMembersTBL as ct
     INNER JOIN DoctorTBL as d
     on ct.MemberID = d.DoctorID
 WHERE CareTeamID = @ECareTeamId
+-- CORRECTION: where status = 1
 -- count no. of doctors captured
 SELECT @INumberOfDoctors = COUNT(*)
 FROM @ICareTeamsDoctors
@@ -79,6 +80,8 @@ IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
 BEGIN
     -- if weekend, take into account increased capacity
     SELECT @IWardCapacityForToday = @IWardCapacity * 1.2
+    -- CORRECTION: could use "select ceiling(@IWardCapacity*1.2)" <- important for exam!!
+    -- it will round up and make sure that the 120% ward capacity is a whole no.
 END
 ELSE
 BEGIN
@@ -114,7 +117,7 @@ SELECT @IPatientAge = DATEDIFF(YEAR, @EPatientDateOfBirth, GETDATE())
 IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC' OR UPPER(@IWardSpeciality) LIKE 'PAEDS')
 BEGIN
     IF (@IPatientAge > 18 OR @IPatientAge < 15)
-BEGIN
+    BEGIN
         ;THROW 500002, 'Attempted to assign patient to a ward for patients between 15 and 18 years of age', 1
     END
 END
@@ -122,7 +125,7 @@ END
 IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC15' OR UPPER(@IWardSpeciality) LIKE 'PAEDS15')
 BEGIN
     IF (@IPatientAge >= 15 OR @IPatientAge <= 13)
-BEGIN
+    BEGIN
         ;THROW 500003, 'Attempted to assign patient to a ward for patients between 13 and 15 years of age', 1
     END
 END
@@ -130,7 +133,7 @@ END
 IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC13' OR UPPER(@IWardSpeciality) LIKE 'PAEDS13')
 BEGIN
     IF (@IPatientAge > 13)
-BEGIN
+    BEGIN
         ;THROW 500004, 'Attempted to assign patient to a ward for patients under 13 years of age', 1
     END
 END
@@ -168,6 +171,8 @@ END
 IF (@INumberOfDoctors = 0)
 BEGIN
     -- still insert patient despite insuffient staff
+    -- CORRECTION: raiserror vs ;throw: raiserror will return the error msg but wont stop the rest of the program from running
+    -- (the application should highlight the error and then continue w/ the rest of the application not the weird ;throw thing below)
     RAISERROR ('Care team does not have at least one active doctor; Patient was recorded without care team', 10, 1)
     EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
     ;THROW 500007, 'Care team does not have at least one active doctor; Patient was recorded without care team', 1
