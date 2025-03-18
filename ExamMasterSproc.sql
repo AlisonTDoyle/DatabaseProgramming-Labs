@@ -3,317 +3,267 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 ALTER proc [dbo].[ExamMaster]
--- EXTERNAL VARIABLES
-@EPatientFirstName VARCHAR(35)
-, @EPatientLastName VARCHAR(35)
-, @EPatientDateOfBirth DATE
-, @EPatientCovidStatus char(8)
-, @EWardId INT
-, @ECareTeamId INT
+-- external variables
+@EFname varchar(35),@ELname varchar(35), 
+@EDOB date, @EWardID int, @ECareteamID int, @ECovidStatus varchar(20)
 as
--- turn of 'x no of rows affected' messages
-SET NOCOUNT ON;
--- INTERNAL VARIABLES
-Declare 
-@IDayOfTheWeek VARCHAR(9)
-, @IWardCapacity INT
-, @IWardCapacityForToday INT
-, @ICurrentWardPatientCount TINYINT
-, @IUpdateWardStatus BIT
-, @IPatientAge TINYINT
-, @IWardSpeciality CHAR(10)
-, @ICareTeamsDoctors CareTeamDoctorsUDT
-, @ICareTeamNurses CareTeamNursesUDT
-, @INumberOfDoctorsVaccinated INT
-, @INumberOfNursesVaccinated INT
-, @INumberOfDoctors INT
-, @INumberOfNurses INT
-, @IUnassignedNursesOnWard UnassignedNursesUDT
-, @INumberOfUnassignedNurses INT
-, @IUnassignedVaccinatedNurses UnassignedNursesUDT
-, @INewNurseId INT
-, @INumberOfDoctorsWithCorrectSpeciality INT
-, @INumberOfNursessWithCorrectSpeciality INT
-, @INewPatientId INT
-, @IErrorMessage VARCHAR(150)
--- READ DATA AND POPULATE INTERNAL VARIABLES
--- get day of the week
-SELECT @IDayOfTheWeek = DATENAME(WEEKDAY, GETDATE())
--- get default capacity for ward
-SELECT @IWardCapacity = WardCapacity
-FROM [dbo].[WarDTBL]
-WHERE WardID = @EWardId
--- get current no. of patients on ward
-SELECT @ICurrentWardPatientCount = COUNT(*)
-FROM [dbo].PatientTBL
-WHERE PatientWarD = @EWardId
--- get selected ward speciality
-SELECT @IWardSpeciality = WardSpeciality
-FROM [dbo].[WarDTBL]
-WHERE WardID = @EWardId
--- get relevent doctors
-INSERT INTO @ICareTeamsDoctors
-    (DoctorId, CareTeamId, DoctorSpecialty, Covid19Vaccinated)
-SELECT d.DoctorID, ct.CareTeamID, d.DoctorSpeciality, d.COVID19Vacinated
-FROM DoctorCareTeamMembersTBL as ct
-    INNER JOIN DoctorTBL as d
-    on ct.MemberID = d.DoctorID
-WHERE CareTeamID = @ECareTeamId
--- CORRECTION: where status = 1
--- count no. of doctors captured
-SELECT @INumberOfDoctors = COUNT(*)
-FROM @ICareTeamsDoctors
--- get relevent care team nurses
-INSERT INTO @ICareTeamNurses
-    (NurseId, CareTeamId, NurseSpeciality, NurseWard, Covid19Vaccinated)
-SELECT n.NurseID, ct.CareTeamID, n.NurseSpeciality, n.NurseWarD, n.COVID19Vacinated
-FROM NurseCareTeamMembersTBL as ct
-    INNER JOIN NurseTBL as n
-    on ct.MemberID = n.NurseID
-WHERE CareTeamID = @ECareTeamId
--- count no. of nurses captured
-SELECT @INumberOfNurses = COUNT(*)
-FROM @ICareTeamNurses
--- BUSINESS LOGIC
--- calculate todays capacity
-IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
-BEGIN
-    -- if weekend, take into account increased capacity
-    SELECT @IWardCapacityForToday = @IWardCapacity * 1.2
-    -- CORRECTION: could use "select ceiling(@IWardCapacity*1.2)" <- important for exam!!
-    -- it will round up and make sure that the 120% ward capacity is a whole no.
-END
-ELSE
-BEGIN
-    -- if weekday, capacity is normal
-    SELECT @IWardCapacityForToday = @IWardCapacity
-END
--- check if patient will breach capacity
-IF ((@ICurrentWardPatientCount + 1) > @IWardCapacityForToday)
-BEGIN
-    SELECT @IErrorMessage = CONCAT(
-    'This ward is full - Find a different ward for ',
-    UPPER(SUBSTRING(@EPatientFirstName, 1, 1)),
-    LOWER(SUBSTRING(@EPatientFirstName, 2, LEN(@EPatientFirstName)-1)),
-    ' ',
-    UPPER(SUBSTRING(@EPatientLastName, 1, 1)),
-    LOWER(SUBSTRING(@EPatientLastName, 2, LEN(@EPatientLastName)-1))
+-- internal variables
+declare @IWardcapacity tinyint, @IWardspec varchar (25)
+,@INoOfPatients tinyint, @INoofDoctors tinyint
+,@INoOfNurses tinyint,@INoOfSpecNurses tinyint, @IDay varchar(12)
+,@IAge tinyint, @IPatientID int, @ICareTeamFlag bit = 1
+, @IName varchar(100), @msgtext varchar(1000), @msg varchar(1000)
+, @IAddNurseN int, @IAddNurseP int
+set nocount on
+-- do the reads
+--read the data from the ward table
+select @IWardcapacity=WardCapacity
+, @IWardspec=WardSpeciality
+from dbo.WardTbl
+where WardID=@EWardID
+-- how many patients are there on this ward
+select @INoOfPatients=COUNT(*)
+from dbo.PatientTbl
+where PatientWard = @EWardID
+-- how many nurses are there on this care team
+select @INoOfNurses = COUNT(*)
+from dbo.NurseCareTeamMembersTBL
+where CareTeamID=@ECareteamID
+and CurrentMember = 1
+-- how many nurses are there on this care team who have the speciality
+select @INoOfSpecNurses =count(*)
+from dbo.NurseCareTeamMembersTBL as nc
+join dbo.NurseTBL  as n on
+nc.MemberID= n.NurseID
+where CareTeamID=@ECareteamID
+and
+SUBSTRING(NurseSpeciality,(len(NurseSpeciality)-2),3) like SUBSTRING(@IWardspec,1,3)
+and 
+CurrentMember = 1
+-- how many doctors are there on this care team 
+--who have the speciality
+select @INoofDoctors = COUNT(*)
+from dbo.DoctorTbl as d
+inner join dbo.DoctorCareTeamMembersTBL  as dc on
+d.DoctorID=dc.MemberID
+where CareTeamID=@ECareteamID
+and
+SUBSTRING(DoctorSpeciality,(len(DoctorSpeciality)-2),3) like SUBSTRING(@IWardspec,1,3)
+and CurrentMember = 1
+-- what day of the week is it
+select @IDay=DATENAME(dw,getdate())
+--now populate the temp tables with available nurses from the ward
+-- who are not active on 3 care teams
+select NurseID
+into #t1
+from dbo.NurseTBL as n
+join dbo.NurseCareTeamMembersTBL as c on
+n.NurseID=c.MemberID
+where CurrentMember = 1
+and NurseWard = @EWardID
+AND NURSEID NOT IN
+(SELECT MemberID
+FROM DBO.NurseCareTeamMembersTBL
+where  CurrentMember=@ECareteamID
 )
-    -- alert user to ward capacity breach
-    ;throw 500001, @IErrorMessage, 1
+group by NurseID
+having count(*) <3
+-- add in those not assinged to a care team 
+-- and have not been assinged to a ward
+-- and have not been vaccinated
+union
+select NurseID
+from dbo.NurseTBL as n
+left join dbo.NurseCareTeamMembersTBL as nc on
+n.NurseID=nc.MemberID
+where 
+nc.MemberID is null
+and NurseWard is null
+and COVID19Vacinated = 0
+-- randomly select a nurse from this table
+select top 1 @IAddNurseN = NurseID
+from #t1
+order by newid()
+-- now repeat this but this time 
+-- get nurses that have been vaccinated
+select NurseID
+into #t2
+from dbo.NurseTBL as n
+join dbo.NurseCareTeamMembersTBL as c on
+n.NurseID=c.MemberID
+where CurrentMember = 1
+and NurseWard = @EWardID
+AND NURSEID NOT IN
+(SELECT MemberID
+FROM DBO.NurseCareTeamMembersTBL
+where  CurrentMember=@ECareteamID
+and CareTeamID=1)
+group by NurseID
+having count(*) <3
+-- add in those not assinged to a care team 
+-- and have not been assinged to a ward
+-- and have  been vaccinated
+union
+select NurseID
+from dbo.NurseTBL as n
+left join dbo.NurseCareTeamMembersTBL as nc on
+n.NurseID=nc.MemberID
+where 
+nc.MemberID is null
+and NurseWard is null
+and COVID19Vacinated = 1
+-- now randomly select from this list
+select top 1 @IAddNurseP = NurseID
+from #t2
+order by newid()
+-- Do The Logic
+-- get the patients age
+if MONTH(@EDOB) <= MONTH(getdate()) 
+and day(@EDOB) <= day(getdate())
+begin
+select @IAge = DATEDIFF(yy, @EDOB, getdate())
+end
+else 
+begin
+select @iage = (DATEDIFF(yy, @EDOB, getdate()))-1
+end
+--is the ward full and its not a weekend
+if @IWardcapacity<=@INoOfPatients
+begin
+if @iday not like 'sunday' and @IDay not like 'saturday'
+begin
+select @IName= Upper(substring(@EFname,1,1)) + SUBSTRING(@EFname,2,len(@EFname))
++' '+Upper(substring(@ELname,1,1)) + SUBSTRING(@ELname,2,len(@ELname))
+ select @msgtext =  N'This ward is overflowing – find a different ward for %s'
+ select @msg = FORMATMESSAGE (@msgtext,  @IName);   
+;THROW 50001, @msg, 1 
+end
+else 
+--is the ward at 120% capacity and it is a weekend
+if ceiling((@IWardcapacity*1.2))<=@INoOfPatients
+begin
+select @IName= Upper(substring(@EFname,1, 1)) + SUBSTRING(@EFname,2,len(@EFname))
++' '+Upper(substring(@ELname,1,1)) + SUBSTRING(@ELname,2,len(@ELname))
+ select @msgtext = N'This ward is overflowing – find a different ward for %s'
+ select @msg = FORMATMESSAGE (@msgtext,  @IName);   
+;THROW 50001, @msg, 1 
+end
+end
+-- what about the age rules
+SELECT @msgtext =
+CASE 
+-- less that or equal to 13
+WHEN @IAge <= 13 and 
+(
+@Iwardspec not LIKE '%Paeds13%' 
+and @IWardspec not LIKE '%Paediatrics13%' 
+)
+THEN N'Patients in this ward must be 13 or younger'
+ --age > 13 and M 15 ==> 14 years old check
+when @IAge = 14 and
+(
+@Iwardspec not LIKE '%Paeds15%' 
+and @IWardspec not LIKE '%Paediatrics15%' 
+)
+THEN N'Patients in this ward must be 14'
+ --aged between 15 and 18 check
+when @IAge between 15 and 18 
+and 
+(
+@IWardspec not  like '%paeds%'
+or (@Iwardspec like '%paeds13%' or @IWardspec like '%paeds15%'
+OR @Iwardspec   like '%paediatrics13%' 
+OR @IWardspec like '%paediatrics15%' 
+)
+)
+then  N'Patients between 15 and 18 not allowed in this ward'
+when @IAge >18
+and 
+(
+@IWardspec  like '%paeds%'
+or (@Iwardspec like '%paeds13%' or @IWardspec like '%paeds15%'
+OR @Iwardspec   like '%paediatrics13%' 
+OR @IWardspec like '%paediatrics15%' 
+)
+)
+then  N'Adults are not allowed on Children''s ward'
+else NUll
 END
--- check if ward is starting to overflow (only applicable to weekends)
-IF UPPER(@IDayOfTheWeek) = 'SATURDAY' OR UPPER(@IDayOfTheWeek) = 'SUNDAY'
+ --if one of the ages causes a fail finish here
+IF @msgtext IS NOT NULL
 BEGIN
-    IF (((@ICurrentWardPatientCount + 1) > @IWardCapacity) AND ((@ICurrentWardPatientCount + 1) <= @IWardCapacityForToday))
-BEGIN
-        SELECT @IUpdateWardStatus = 1
-    END
+select @msg = FORMATMESSAGE (@msgtext);   
+;THROW 50001, @msg, 1 
 END
--- calculate patient age
-SELECT @IPatientAge = DATEDIFF(YEAR, @EPatientDateOfBirth, GETDATE())
--- check if patient is being assigned to the right ward
--- check for paed ward
-IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC' OR UPPER(@IWardSpeciality) LIKE 'PAEDS')
-BEGIN
-    IF (@IPatientAge > 18 OR @IPatientAge < 15)
-    BEGIN
-        ;THROW 500002, 'Attempted to assign patient to a ward for patients between 15 and 18 years of age', 1
-    END
-END
--- check for paed15 ward
-IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC15' OR UPPER(@IWardSpeciality) LIKE 'PAEDS15')
-BEGIN
-    IF (@IPatientAge >= 15 OR @IPatientAge <= 13)
-    BEGIN
-        ;THROW 500003, 'Attempted to assign patient to a ward for patients between 13 and 15 years of age', 1
-    END
-END
--- check for paed13 ward
-IF (UPPER(@IWardSpeciality) LIKE 'PAEDIATRIC13' OR UPPER(@IWardSpeciality) LIKE 'PAEDS13')
-BEGIN
-    IF (@IPatientAge > 13)
-    BEGIN
-        ;THROW 500004, 'Attempted to assign patient to a ward for patients under 13 years of age', 1
-    END
-END
--- check if patient has covid
-IF (UPPER(@EPatientCovidStatus) LIKE 'POSITIVE')
-BEGIN
-    -- count number of doctors vaccinated
-    SELECT @INumberOfDoctorsVaccinated = COUNT(*)
-    FROM @ICareTeamsDoctors
-    WHERE Covid19Vaccinated = 1
-    -- check if all doctors are vaccinated
-    IF (@INumberOfDoctorsVaccinated < @INumberOfDoctors)
-    BEGIN
-        -- still insert patient despite unvaccinated staff    
-        -- have to double up on error messages because i was having issues with the ;throw after the exec statment
-        RAISERROR ('Not all doctors on care team are vaccinated; Patient was recorded without care team', 10, 1)
-        EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
-        ;THROW 500005, 'Not all doctors on care team are vaccinated; Patient was recorded without care team', 1
-    END
-    -- count number of nurses vaccinated
-    SELECT @INumberOfNursesVaccinated = COUNT(*)
-    FROM @ICareTeamNurses
-    WHERE Covid19Vaccinated = 1
-    -- check if all nurses are vaccinated
-    IF (@INumberOfNursesVaccinated < @INumberOfNurses)
-    BEGIN
-        -- still insert patient despite unvaccinated staff
-        RAISERROR ('Not all nurses on care team are vaccinated; Patient was recorded without care team', 10, 1)
-        EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
-        ;THROW 500006, 'Not all nurses on care team are vaccinated; Patient was recorded without care team', 1
-    END
-END
--- check the min amount of staff are assigned to care team (1 doctor, 2 nurses)
--- check number of doctors
-IF (@INumberOfDoctors = 0)
-BEGIN
-    -- still insert patient despite insuffient staff
-    -- CORRECTION: raiserror vs ;throw: raiserror will return the error msg but wont stop the rest of the program from running
-    -- (the application should highlight the error and then continue w/ the rest of the application not the weird ;throw thing below)
-    RAISERROR ('Care team does not have at least one active doctor; Patient was recorded without care team', 10, 1)
-    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
-    ;THROW 500007, 'Care team does not have at least one active doctor; Patient was recorded without care team', 1
-END
--- check number of nurses
-IF (@INumberOfNurses = 0)
-BEGIN
-    -- still insert patient despite insuffient staff
-    RAISERROR ('Care team does not have at least one active nurse; Patient was recorded without care team', 10, 1)
-    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
-    ;THROW 500008, 'Care team does not have at least one active nurse; Patient was recorded without care team', 1
-END
-ELSE IF (@INumberOfNurses = 1)
-    BEGIN
-    -- check patient covid status to decide on what type of nurse to select
-    IF(UPPER(@EPatientCovidStatus) LIKE UPPER('Negative'))
-        BEGIN
-        -- if patient does not have covid, try to assign nurse from current ward to care team
-        -- find nurses on ward that have less than 3 care teams and not already assigned to current care team
-        INSERT INTO @IUnassignedNursesOnWard
-            (NurseId, NurseSpeciality, NurseWard, Covid19Vaccinated)
-        SELECT NurseID, NurseSpeciality, NurseWarD, COVID19Vacinated
-        FROM NurseTBL AS n
-        WHERE n.NurseWard = @EWardId
-            AND (
-            SELECT COUNT(*)
-            FROM NurseCareTeamMembersTBL AS ct
-            WHERE ct.MemberID = n.NurseID
-        ) < 3
-            AND n.NurseID != (
-            SELECT NurseID
-            FROM @ICareTeamNurses
-        )
-        -- check if there was a suitable nurse on ward
-        SELECT @INumberOfUnassignedNurses = COUNT(*)
-        FROM @IUnassignedNursesOnWard
-        IF(@INumberOfUnassignedNurses = 0)
-        BEGIN
-            -- if no available nurses are found on current ward, check for nurses without any ward
-            INSERT INTO @IUnassignedNursesOnWard
-                (NurseId, NurseSpeciality, NurseWard, Covid19Vaccinated)
-            SELECT n.NurseID, n.NurseSpeciality, n.NurseWarD, n.COVID19Vacinated
-            FROM NurseTBL AS n
-                LEFT JOIN NurseCareTeamMembersTBL AS ct
-                ON n.NurseID = ct.MemberID
-            WHERE n.NurseWard IS NULL
-                AND 0 = (
-            SELECT COUNT(*)
-                FROM NurseCareTeamMembersTBL
-                WHERE MemberID = NurseID
-            )
-        END
-        -- get nurse by id ascending
-        SELECT TOP 1
-            @INewNurseId = NurseId
-        FROM @IUnassignedNursesOnWard
-        ORDER BY NurseId
-        -- assign to care team if a nurse was found
-        IF (@INewNurseId IS NOT NULL)
-        BEGIN
-            EXEC [dbo].[InsertNurse] @ECareTeamId, @INewNurseId
-        END
-        ELSE
-        BEGIN
-            -- still insert patient despite insuffient staff
-            RAISERROR ('Could not find an extra nurse to assign to care team; Patient was recorded without care team', 10, 1)
-            EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
-            ;THROW 500009, 'Could not find an extra nurse to assign to care team; Patient was recorded without care team', 1
-        END
-    END
-        ELSE
-        BEGIN
-        -- if patient covid status is unknown or negative, try to assign a vaccinated nurse w/ no ward or team
-        -- find vaccinated nurses without a care team or ward
-        INSERT INTO @IUnassignedVaccinatedNurses
-            (NurseId, NurseSpeciality, NurseWard, Covid19Vaccinated)
-        SELECT n.NurseID, n.NurseSpeciality, n.NurseWarD, n.COVID19Vacinated
-        FROM NurseTBL AS n
-            LEFT JOIN NurseCareTeamMembersTBL AS ct
-            ON n.NurseID = ct.MemberID
-        WHERE n.COVID19Vacinated = 1
-            AND n.NurseWard IS NULL
-            AND 0 = (
-            SELECT COUNT(*)
-            FROM NurseCareTeamMembersTBL
-            WHERE MemberID = NurseID
-            )
-        -- get nurse by id ascending
-        SELECT TOP 1
-            @INewNurseId = NurseId
-        FROM @IUnassignedVaccinatedNurses
-        ORDER BY NurseId
-        -- assign to care team if a nurse was found
-        IF (@INewNurseId IS NOT NULL)
-        BEGIN
-            EXEC [dbo].[InsertNurse] @ECareTeamId, @INewNurseId
-        END
-        ELSE
-        BEGIN
-            -- still insert patient despite insuffient staff
-            RAISERROR ('Could not find an extra vaccinated nurse to assign to care team; Patient was recorded without care team', 10, 1)
-            EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
-            ;THROW 500010, 'Could not find an extra vaccinated nurse to assign to care team; Patient was recorded without care team', 1
-        END
-    END
-END
--- check staff have correct speciality
--- count no. of doctors with correct speciality
-SELECT @INumberOfDoctorsWithCorrectSpeciality = COUNT(*)
-FROM @ICareTeamsDoctors
-WHERE UPPER(RIGHT(DoctorSpecialty, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
--- check if enough doctors match speciality
-IF (@INumberOfDoctorsWithCorrectSpeciality < 1)
-BEGIN
-    -- still insert patient despite insuffient staff
-    RAISERROR ('Care team does not have at least one doctor with the speciality; Patient was recorded without care team', 10, 1)
-    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
-    ;THROW 500011, 'Care team does not have at least one doctor with the speciality; Patient was recorded without care team', 1
-END
--- count no. of nurses with correct speciality
-SELECT @INumberOfNursessWithCorrectSpeciality = COUNT(*)
-FROM @ICareTeamNurses
-WHERE UPPER(RIGHT(NurseSpeciality, 3)) = UPPER(LEFT(@IWardSpeciality, 3))
--- check if enough nurses match speciality
-IF (@INumberOfNursessWithCorrectSpeciality < 1)
-BEGIN
-    -- still insert patient despite insuffient staff
-    RAISERROR ('Care team does not have at least one nurse with the speciality; Patient was recorded without care team', 10, 1)
-    EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
-    ;THROW 500012, 'Care team does not have at least one nurse with the speciality; Patient was recorded without care team', 1
-END
--- SUBSPROCS
--- check if ward status needs updating to overflow
-IF (@IUpdateWardStatus = 1)
-BEGIN
-    EXEC UpdateWardStatus @EWardId
-END
--- record new patient and capture their id
-EXEC InsertPatient @EPatientFirstName, @EPatientLastName, @EWardId, @EPatientCovidStatus, @EPatientId = @INewPatientId OUTPUT
--- assign patient to care team in CareTeamTBL
-EXEC InsertIntoCareTeam @ECareTeamID, @INewPatientId
--- SUCCESS MESSAGE
-print 'Patient successfully recorded'
-GO
+--Now Do Care Team Rules
+ --is there a nurse with the speciality
+if @INoOfSpecNurses = 0
+Begin
+SELECT @ICareTeamFlag = 0
+raiserror ('no nurse has the required speciality', 16,1)
+end
+-- is there a doctor with the speciality
+if @INoofDoctors = 0
+Begin
+SELECT @ICareTeamFlag = 0
+raiserror ('no doctor has the required speciality', 16,1)
+end
+ --enough current members for Covid Positive?
+if (@INoOfNurses<3 or @INoofDoctors< 1) 
+and @ECovidStatus not like 'Positive'
+and @IAddNurseP is null
+begin
+SELECT @ICareTeamFlag = 0
+raiserror ('not enough members available for the team', 16,1)
+end
+-- enough current members for Covid Negative?
+if (@INoOfNurses<3 or @INoofDoctors< 1) 
+and @ECovidStatus  like 'Negative'
+and @IAddNursen is null
+begin
+SELECT @ICareTeamFlag = 0
+raiserror ('not enough members available for the team', 16,1)
+end
+--OK Business Rules have been passed
+ --Call other procs to do the inserts
+ --insert the patient
+begin try
+exec dbo.InsertPatient @eFname, @ELname, @EWardID, @ECovidStatus
+, @EPatientID=@IPatientID output
+end try
+begin catch
+;throw
+end catch
+-- add the nurse to the care team if there is one available
+If @IAddNurseN is not null
+begin
+begin try
+exec dbo.InsertNurse @ECareTeamID, @IAddNurseN
+end try
+begin catch
+;throw
+end catch
+end
+If @IAddNurseP is not null
+begin
+begin try
+exec dbo.InsertNurse @ECareTeamID, @IAddNurseP
+end try
+begin catch
+;throw
+end catch
+end
+-- Assign the Patient to the Care Team if allowed 
+if @ICareTeamFlag = 1
+begin try
+exec dbo.InsertIntoCareTeam @eCareteamID, @IPatientID
+end try
+begin catch
+;throw
+end catch
+ --all ok do a cleanup of tem table
+  DROP TABLE #t1;
+ DROP TABLE #t2;
+  -- got here let them know
+raiserror ('The Patient has been admitted',16,1)
+return 0
