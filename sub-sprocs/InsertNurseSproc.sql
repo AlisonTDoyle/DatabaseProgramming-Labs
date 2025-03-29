@@ -22,6 +22,4 @@ END TRY
 BEGIN CATCH
 ;throw
 END CATCH
--- success message
-RAISERROR ('Nurse has been inserted', 0, 1)
 GO

@@ -35,8 +35,6 @@ while (@IRetryCount <= 3)
 BEGIN
     -- try block to catch any deadlock errors
     BEGIN TRY
-        -- (DEBUGGING) record how many attempts where completed
-        PRINT CONCAT('Attempt No. ', CAST(@IRetryCount as varchar(20)))
         -- start transaction
 		BEGIN TRANSACTION
         -- do the reads
@@ -247,12 +245,11 @@ BEGIN
         --Call other procs to do the inserts
         --insert the patient
         begin try            
-            -- (DEBUGGING)
-            WAITFOR DELAY '00:00:05'
             exec dbo.InsertPatient @EFname, @ELname, @EWardID, @ECovidStatus, @EPatientId=@IPatientID output
             EXEC dbo.UpdatePatientInWardTBL @EWardID
         end try
         begin catch
+            ROLLBACK TRANSACTION
             ;throw
         end catch
         -- add the nurse to the care team if there is one available
@@ -262,6 +259,7 @@ BEGIN
                 exec dbo.InsertNurse @ECareTeamID, @IAddNurseN
             end try
             begin catch
+                ROLLBACK TRANSACTION
                 ;throw
             end catch
         end
@@ -271,6 +269,7 @@ BEGIN
                 exec dbo.InsertNurse @ECareTeamID, @IAddNurseP
             end try
             begin catch
+                ROLLBACK TRANSACTION
                 ;throw
             end catch
         end
@@ -281,6 +280,7 @@ BEGIN
                 exec dbo.InsertIntoCareTeam @eCareteamID, @IPatientID
             end try
                 begin catch
+                ROLLBACK TRANSACTION
                 ;throw
             end catch
         end
@@ -301,7 +301,7 @@ BEGIN
         IF (ERROR_NUMBER() = 1205)
         BEGIN
             -- let user know a deadlock occured
-            PRINT 'Error: Deadlock has occured'
+            PRINT 'Error: Deadlock has occured. Reattempting request...'
             -- undo any changes made in previous attempt
             ROLLBACK TRANSACTION
             -- prepare for reattempt

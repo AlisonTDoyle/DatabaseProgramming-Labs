@@ -16,5 +16,3 @@ END TRY
 BEGIN CATCH
 ;THROW
 END CATCH
--- success message
-RAISERROR ('No. of Patients on ward updated', 0, 1)

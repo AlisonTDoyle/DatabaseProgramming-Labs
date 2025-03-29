@@ -17,5 +17,3 @@ END TRY
 BEGIN CATCH
 ;THROW
 END CATCH
--- success message
-RAISERROR ('Patient has been assigned to care team', 0, 1)

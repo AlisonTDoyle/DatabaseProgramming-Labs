@@ -16,6 +16,4 @@ END TRY
 BEGIN CATCH
 ;THROW
 END CATCH
--- success message
-RAISERROR ('Ward status updates to "overflow"', 0, 1)
 GO
