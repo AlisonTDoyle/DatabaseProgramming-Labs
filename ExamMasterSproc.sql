@@ -243,9 +243,53 @@ BEGIN
             SELECT @ICareTeamFlag = 0
             raiserror ('not enough members available for the team', 16,1)
         end
+        --OK Business Rules have been passed
+        --Call other procs to do the inserts
         -- (DEBUGGING)
         WAITFOR DELAY '00:00:05'
         EXEC dbo.UpdatePatientInWardTBL @EWardID
+        --insert the patient
+        begin try
+            exec dbo.InsertPatient @EFname, @ELname, @EWardID, @ECovidStatus, @EPatientId=@IPatientID output
+        end try
+        begin catch
+            ;throw
+        end catch
+        -- add the nurse to the care team if there is one available
+        If @IAddNurseN is not null
+        begin
+            begin try        
+                exec dbo.InsertNurse @ECareTeamID, @IAddNurseN
+            end try
+            begin catch
+                ;throw
+            end catch
+        end
+        If @IAddNurseP is not null
+        begin
+            begin try        
+                exec dbo.InsertNurse @ECareTeamID, @IAddNurseP
+            end try
+            begin catch
+                ;throw
+            end catch
+        end
+        -- Assign the Patient to the Care Team if allowed 
+        if @ICareTeamFlag = 1
+        begin 
+            begin try
+                exec dbo.InsertIntoCareTeam @eCareteamID, @IPatientID
+            end try
+                begin catch
+                ;throw
+            end catch
+        end
+        --all ok do a cleanup of tem table
+        DROP TABLE #t1;
+        DROP TABLE #t2;
+        -- got here let them know
+        raiserror ('The Patient has been admitted',16,1)
+        return 0
         -- if everything goes as intended, commit transaction
         COMMIT TRANSACTION 
         -- when transaction is complete, end loop
