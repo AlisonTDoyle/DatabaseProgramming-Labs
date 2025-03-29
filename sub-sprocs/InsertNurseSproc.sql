@@ -23,5 +23,5 @@ BEGIN CATCH
 ;throw
 END CATCH
 -- success message
-RAISERROR ('Patient has been inserted', 16, 1)
+RAISERROR ('Nurse has been inserted', 0, 1)
 GO

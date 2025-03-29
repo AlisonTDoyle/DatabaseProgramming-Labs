@@ -11,7 +11,7 @@ ALTER proc [dbo].[ExamMaster]
     @ECareteamID int,
     @ECovidStatus varchar(20)
 as
-set transaction isolation level serializable
+set transaction isolation level repeatable read
 -- internal variables
 declare @IWardcapacity tinyint, 
 @IWardspec varchar (25),
@@ -245,12 +245,12 @@ BEGIN
         end
         --OK Business Rules have been passed
         --Call other procs to do the inserts
-        -- (DEBUGGING)
-        WAITFOR DELAY '00:00:05'
-        EXEC dbo.UpdatePatientInWardTBL @EWardID
         --insert the patient
-        begin try
+        begin try            
+            -- (DEBUGGING)
+            WAITFOR DELAY '00:00:05'
             exec dbo.InsertPatient @EFname, @ELname, @EWardID, @ECovidStatus, @EPatientId=@IPatientID output
+            EXEC dbo.UpdatePatientInWardTBL @EWardID
         end try
         begin catch
             ;throw
@@ -288,8 +288,8 @@ BEGIN
         DROP TABLE #t1;
         DROP TABLE #t2;
         -- got here let them know
-        raiserror ('The Patient has been admitted',16,1)
-        return 0
+        raiserror ('The Patient has been admitted',0,1)
+        -- return 0
         -- if everything goes as intended, commit transaction
         COMMIT TRANSACTION 
         -- when transaction is complete, end loop

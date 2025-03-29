@@ -24,4 +24,4 @@ BEGIN CATCH
 ;throw 500001, 'Something went wrong inserting patient', 1
 END CATCH
 -- success message
-RAISERROR ('Patient has been inserted', 16, 1)
+RAISERROR ('Patient has been inserted', 0, 1)

@@ -17,5 +17,5 @@ BEGIN CATCH
 ;THROW
 END CATCH
 -- success message
-RAISERROR ('Ward status updates to "overflow"', 16, 1)
+RAISERROR ('Ward status updates to "overflow"', 0, 1)
 GO
