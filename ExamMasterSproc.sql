@@ -140,6 +140,109 @@ BEGIN
         select top 1 @IAddNurseP = NurseID
         from #t2
         order by newid()
+        -- Do The Logic
+        -- get the patients age
+        if MONTH(@EDOB) <= MONTH(getdate()) and day(@EDOB) <= day(getdate())
+        begin
+            select @IAge = DATEDIFF(yy, @EDOB, getdate())
+        end
+        else 
+        begin
+            select @iage = (DATEDIFF(yy, @EDOB, getdate()))-1
+        end
+        --is the ward full and its not a weekend
+        if @IWardcapacity<=@INoOfPatients
+        begin
+        if @iday not like 'sunday' and @IDay not like 'saturday'
+        begin
+            select @IName= Upper(substring(@EFname,1,1)) + SUBSTRING(@EFname,2,len(@EFname))
+            +' '+Upper(substring(@ELname,1,1)) + SUBSTRING(@ELname,2,len(@ELname))
+            select @msgtext =  N'This ward is overflowing – find a different ward for %s'
+            select @msg = FORMATMESSAGE (@msgtext,  @IName);   
+            ;THROW 50001, @msg, 1 
+        end
+        else 
+            --is the ward at 120% capacity and it is a weekend
+            if ceiling((@IWardcapacity*1.2))<=@INoOfPatients
+            begin
+                select @IName= Upper(substring(@EFname,1, 1)) + SUBSTRING(@EFname,2,len(@EFname))
+                +' '+Upper(substring(@ELname,1,1)) + SUBSTRING(@ELname,2,len(@ELname))
+                select @msgtext = N'This ward is overflowing – find a different ward for %s'
+                select @msg = FORMATMESSAGE (@msgtext,  @IName);   
+                ;THROW 50001, @msg, 1 
+            end
+        end
+        -- what about the age rules
+        SELECT @msgtext =
+        CASE
+            -- less that or equal to 13
+            WHEN @IAge <= 13 and 
+            (
+            @Iwardspec not LIKE '%Paeds13%' 
+            and @IWardspec not LIKE '%Paediatrics13%' 
+            )
+            THEN N'Patients in this ward must be 13 or younger'
+            --age > 13 and M 15 ==> 14 years old check
+            when @IAge = 14 and
+            (
+            @Iwardspec not LIKE '%Paeds15%' 
+            and @IWardspec not LIKE '%Paediatrics15%' 
+            )
+            THEN N'Patients in this ward must be 14'
+            --aged between 15 and 18 check
+            when @IAge between 15 and 18 
+            and 
+            (
+            @IWardspec not  like '%paeds%'
+            or (@Iwardspec like '%paeds13%' or @IWardspec like '%paeds15%'
+            OR @Iwardspec   like '%paediatrics13%' 
+            OR @IWardspec like '%paediatrics15%' 
+            )
+            )
+            then  N'Patients between 15 and 18 not allowed in this ward'
+            when @IAge >18
+            and 
+            (
+            @IWardspec  like '%paeds%'
+            or (@Iwardspec like '%paeds13%' or @IWardspec like '%paeds15%'
+            OR @Iwardspec   like '%paediatrics13%' 
+            OR @IWardspec like '%paediatrics15%' 
+            )
+            )
+            then  N'Adults are not allowed on Children''s ward'
+            else NUll
+        END
+        --if one of the ages causes a fail finish here
+        IF @msgtext IS NOT NULL
+        BEGIN
+            select @msg = FORMATMESSAGE (@msgtext);   
+            ;THROW 50001, @msg, 1 
+        END
+        --Now Do Care Team Rules
+        -- is there a nurse with the speciality
+        if @INoOfSpecNurses = 0
+            Begin
+            SELECT @ICareTeamFlag = 0
+            raiserror ('no nurse has the required speciality', 16,1)
+        end
+        -- is there a doctor with the speciality
+        if @INoofDoctors = 0
+            Begin
+            SELECT @ICareTeamFlag = 0
+            raiserror ('no doctor has the required speciality', 16,1)
+        end
+        --enough current members for Covid Positive?
+        if (@INoOfNurses<3 or @INoofDoctors< 1) and @ECovidStatus not like 'Positive' and @IAddNurseP is null
+        begin
+            SELECT @ICareTeamFlag = 0
+            raiserror ('not enough members available for the team', 16,1)
+        end
+        -- enough current members for Covid Negative?
+        if (@INoOfNurses<3 or @INoofDoctors< 1) and @ECovidStatus  like 'Negative' and @IAddNursen is null
+        begin
+            SELECT @ICareTeamFlag = 0
+            raiserror ('not enough members available for the team', 16,1)
+        end
         -- (DEBUGGING)
         WAITFOR DELAY '00:00:05'
         EXEC dbo.UpdatePatientInWardTBL @EWardID
